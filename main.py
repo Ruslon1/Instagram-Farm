@@ -27,20 +27,16 @@ def upload_photos(username: str, password: str, folder_path: str):
 
         for file_name in files:
             file_path = os.path.join(folder_path, file_name)
-            if file_name.endswith(('.jpg', '.jpeg', '.png')):
-                media = cl.photo_upload(
-                    path=file_path,
-                    caption='Your photo caption here'
-                )
-                typer.echo(f"Uploaded: {file_name}")
+            print(file_name)
             if file_name.endswith(('.mp4')):
+                print("updaupda")
                 media = cl.video_upload(
                     path=file_path,
                     caption=random.choice(captions) + "\n#vlogging#beach#layingdown#whereatcomefrom#green#sand#red#ishowspeed#red#sunny#gettingtothebag#55154#subscribers#daily#wegotthis#sofunny#fish"
                     )
                 typer.echo(f"Uploaded: {file_name}")
             
-            time.sleep(upload_interval)
+            time.sleep(random.randint(300, 2000))
 
     except Exception as e:
         typer.echo(f"Error: {e}")
@@ -51,7 +47,7 @@ def main():
     #password = typer.prompt("Enter your Instagram password:")
     #folder_path = typer.prompt("Enter the folder path containing files to upload:")
     
-    upload_photos("ishowspeed.reel", "87055458798rR", "./video")
+    upload_photos("cinam2ds", "vfFInQnoOP", "./video")
 
 if __name__ == "__main__":
     app()
