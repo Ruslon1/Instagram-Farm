@@ -47,7 +47,7 @@ def main():
     #password = typer.prompt("Enter your Instagram password:")
     #folder_path = typer.prompt("Enter the folder path containing files to upload:")
     
-    upload_photos("cinam2ds", "vfFInQnoOP", "./video")
+    upload_photos("ishowclipspeed", "vfFInQnoOP", "./video")
 
 if __name__ == "__main__":
     app()
