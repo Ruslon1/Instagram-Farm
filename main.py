@@ -1,53 +1,53 @@
 import os
 import time
-import typer
-from instagrapi import Client
-import getpass
-import moviepy
-import json
 import random
+import threading
+from database import init_database
+from video_downloader import get_download_link, download_video
+from instagrapi import Client
 
-app = typer.Typer()
-
-captions = []
-with open("captions.json", "r") as outfile:
-    captions = json.load(outfile)
-
-def upload_photos(username: str, password: str, folder_path: str):
+def upload_video_to_account(username, password, video_path, caption):
     try:
         cl = Client()
-
         cl.login(username, password)
-
-        files = os.listdir(folder_path)
-
-        files.sort()
-
-        upload_interval = 600
-
-        for file_name in files:
-            file_path = os.path.join(folder_path, file_name)
-            print(file_name)
-            if file_name.endswith(('.mp4')):
-                print("updaupda")
-                media = cl.video_upload(
-                    path=file_path,
-                    caption=random.choice(captions) + "\n#vlogging#beach#layingdown#whereatcomefrom#green#sand#red#ishowspeed#red#sunny#gettingtothebag#55154#subscribers#daily#wegotthis#sofunny#fish"
-                    )
-                typer.echo(f"Uploaded: {file_name}")
-            
-            time.sleep(random.randint(300, 2000))
-
+        cl.video_upload(video_path, caption)
+        print(f"Uploaded: {video_path} to account: {username}")
     except Exception as e:
-        typer.echo(f"Error: {e}")
+        print(f"Error uploading video for account {username}: {e}")
 
-@app.command()
+def process_account_videos(account, videos):
+    username, password, purpose = account
+    for video in videos:
+        video_purpose, link = video
+
+        if video_purpose != purpose:
+            continue
+
+        download_url = get_download_link(link)
+        if not download_url:
+            print(f"Failed to get download URL for video: {link}")
+            continue
+
+        output_path = f"./videos/video_{id}.mp4"
+        download_video(download_url, output_path)
+
+        caption = f"Purpose: {purpose} #automatedupload"
+        delay = random.randint(300, 1500)
+        print(f"Waiting for {delay} seconds before uploading for account: {username}")
+        time.sleep(delay)
+        upload_video_to_account(username, password, output_path, caption)
+
 def main():
-    #username = typer.prompt("Enter your Instagram username:")
-    #password = typer.prompt("Enter your Instagram password:")
-    #folder_path = typer.prompt("Enter the folder path containing files to upload:")
-    
-    upload_photos("ishowclipspeed", "vfFInQnoOP", "./video")
+    accounts, videos = init_database()
+
+    threads = []
+    for account in accounts:
+        thread = threading.Thread(target=process_account_videos, args=(account, videos))
+        thread.start()
+        threads.append(thread)
+
+    for thread in threads:
+        thread.join()
 
 if __name__ == "__main__":
-    app()
+    main()
