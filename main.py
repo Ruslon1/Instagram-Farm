@@ -17,7 +17,7 @@ def upload_video_to_account(username, password, video_path, caption):
 
 def process_account_videos(account, videos):
     username, password, purpose = account
-    for video in videos:
+    for index, video in enumerate(videos, start=1):
         video_purpose, link = video
 
         if video_purpose != purpose:
@@ -28,7 +28,7 @@ def process_account_videos(account, videos):
             print(f"Failed to get download URL for video: {link}")
             continue
 
-        output_path = f"./videos/video_{id}.mp4"
+        output_path = f"./videos/video_{index}.mp4"
         download_video(download_url, output_path)
 
         caption = f"Purpose: {purpose} #automatedupload"
