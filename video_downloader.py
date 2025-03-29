@@ -17,6 +17,8 @@ def get_download_link(tiktok_url):
     driver.get("https://snaptik.app/en2")
     time.sleep(2)
     try:
+        continue_button = driver.find_element(By.XPATH, '//button[contains(text(), "Continue")]')
+        continue_button.click()
         input_field = driver.find_element(By.XPATH, '//input[@id="url"]')
         input_field.clear()
         input_field.send_keys(tiktok_url)

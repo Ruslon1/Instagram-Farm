@@ -19,7 +19,7 @@ def process_account_videos(account, videos):
     username, password, purpose = account
     for index, video in enumerate(videos, start=1):
         video_purpose, link = video
-
+        print(video_purpose + "  " + link)
         if video_purpose != purpose:
             continue
 
@@ -33,9 +33,9 @@ def process_account_videos(account, videos):
 
         caption = f"Purpose: {purpose} #automatedupload"
         delay = random.randint(300, 1500)
+        upload_video_to_account(username, password, output_path, caption)
         print(f"Waiting for {delay} seconds before uploading for account: {username}")
         time.sleep(delay)
-        upload_video_to_account(username, password, output_path, caption)
 
 def main():
     accounts, videos = init_database()
