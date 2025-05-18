@@ -1,2 +1,4 @@
-instagrapi==2.0.0
-typer==0.9.0
+instagrapi
+python-telegram-bot
+selenium
+requests
