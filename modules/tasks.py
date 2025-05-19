@@ -6,6 +6,7 @@ from modules.database import record_publication
 import os
 import random
 import time
+import hashlib
 
 @app.task
 def process_video(account, video, telegram_token, chat_id):
@@ -20,7 +21,8 @@ def process_video(account, video, telegram_token, chat_id):
         telegram_notify(telegram_token, chat_id, f"Failed to download video from: {link}")
         return
 
-    output_path = f"./videos/{username}_{random.randint(1, 1000)}.mp4"
+    unique_hash = hashlib.md5(f"{username}_{link}".encode()).hexdigest()
+    output_path = f"./videos/{unique_hash}.mp4"
     success = download_video(download_url, output_path)
     if not success:
         telegram_notify(telegram_token, chat_id, f"Failed to download video from: {link}")
