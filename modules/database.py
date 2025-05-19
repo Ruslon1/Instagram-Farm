@@ -18,15 +18,35 @@ def load_accounts_and_videos():
     accounts = cursor.fetchall()
 
     cursor.execute("SELECT link, theme FROM Videos")
-    videos = cursor.fetchall()
+    all_videos = cursor.fetchall()
 
+    # Fetch already published videos
+    cursor.execute("SELECT account_username, video_link FROM PublicationHistory")
+    published = cursor.fetchall()
+    published_set = set(published)
+
+    # Filter videos that haven't been posted yet
     account_to_videos = {}
-    for link, theme in videos:
-        if theme not in account_to_videos:
-            account_to_videos[theme] = []
-        account_to_videos[theme].append(link)
+    for link, theme in all_videos:
+        for account in accounts:
+            username, _, account_theme = account
+            if theme == account_theme and (username, link) not in published_set:
+                if username not in account_to_videos:
+                    account_to_videos[username] = []
+                account_to_videos[username].append(link)
 
     cursor.close()
     connection.close()
 
     return accounts, account_to_videos
+
+def record_publication(username, video_link):
+    connection = get_database_connection()
+    cursor = connection.cursor()
+    cursor.execute(
+        "INSERT INTO PublicationHistory (account_username, video_link) VALUES (%s, %s)",
+        (username, video_link)
+    )
+    connection.commit()
+    cursor.close()
+    connection.close()
