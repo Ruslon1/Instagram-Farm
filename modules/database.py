@@ -14,13 +14,19 @@ def load_accounts_and_videos():
     connection = get_database_connection()
     cursor = connection.cursor()
 
-    cursor.execute("SELECT * FROM Accounts")
+    cursor.execute("SELECT username, password, theme FROM Accounts")
     accounts = cursor.fetchall()
 
-    cursor.execute("SELECT * FROM Videos")
+    cursor.execute("SELECT link, theme FROM Videos")
     videos = cursor.fetchall()
+
+    account_to_videos = {}
+    for link, theme in videos:
+        if theme not in account_to_videos:
+            account_to_videos[theme] = []
+        account_to_videos[theme].append(link)
 
     cursor.close()
     connection.close()
 
-    return accounts, videos
+    return accounts, account_to_videos
