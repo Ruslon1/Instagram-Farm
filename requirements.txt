@@ -2,3 +2,4 @@ instagrapi
 python-telegram-bot
 selenium
 requests
+psycopg2
