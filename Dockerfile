@@ -1,31 +1,19 @@
-FROM python:3.9-slim
+# Use a base Python image
+FROM python:3.10-slim
 
-# Install necessary system dependencies
-RUN apt-get update && apt-get install -y \
-    wget \
-    curl \
-    chromium-driver \
-    && apt-get clean
-
-# Set environment variables
-ENV TELEGRAM_TOKEN=8145955981:AAEjOnSHc5dtbA9gunPe7f8pP9AAE4LyZYM
-ENV TELEGRAM_CHAT_ID=709786113
-
-ENV DB_NAME=insta
-ENV DB_USER=postgres
-ENV DB_PASSWORD=123
-ENV DB_HOST=localhost
-ENV DB_PORT=5432
-
-# Create working directory
+# Set the working directory
 WORKDIR /app
 
-# Copy the requirements file and install Python dependencies
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    gcc \
+    libpq-dev \
+    && apt-get clean
 
-# Copy the application code
+# Copy project files
 COPY . .
 
-# Run the application
-CMD ["python", "main.py"]
+# Install Python dependencies
+RUN pip install --no-cache-dir -r requirements.txt
+
+# This Dockerfile doesn't define CMD since the docker-compose file handles commands

@@ -1,5 +1,5 @@
-instagrapi
-python-telegram-bot
-selenium
+flask
+celery
+redis
+psycopg2-binary
 requests
-psycopg2

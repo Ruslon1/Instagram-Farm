@@ -28,7 +28,7 @@ def process_video(account, video, telegram_token, chat_id):
         telegram_notify(telegram_token, chat_id, f"Failed to download video from: {link}")
         return
 
-    caption = f"Purpose: {purpose} #automatedupload"
+    caption = f""
     upload_result = upload_video_to_instagram(username, password, output_path, caption, telegram_token, chat_id)
     if upload_result:
         telegram_notify(telegram_token, chat_id, f"Successfully uploaded video from: {link} to account: {username}")
