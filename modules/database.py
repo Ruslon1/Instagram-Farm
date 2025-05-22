@@ -14,14 +14,14 @@ def load_accounts_and_videos():
     connection = get_database_connection()
     cursor = connection.cursor()
 
-    cursor.execute("SELECT username, password, theme FROM Accounts")
+    cursor.execute("SELECT username, password, theme FROM accounts")
     accounts = cursor.fetchall()
 
-    cursor.execute("SELECT link, theme FROM Videos")
+    cursor.execute("SELECT link, theme FROM videos")
     all_videos = cursor.fetchall()
 
     # Fetch already published videos
-    cursor.execute("SELECT account_username, video_link FROM PublicationHistory")
+    cursor.execute("SELECT account_username, video_link FROM publicationhistory")
     published = cursor.fetchall()
     published_set = set(published)
 
@@ -44,7 +44,7 @@ def record_publication(username, video_link):
     connection = get_database_connection()
     cursor = connection.cursor()
     cursor.execute(
-        "INSERT INTO PublicationHistory (account_username, video_link) VALUES (%s, %s)",
+        "INSERT INTO publicationhistory (account_username, video_link) VALUES (%s, %s)",
         (username, video_link)
     )
     connection.commit()
