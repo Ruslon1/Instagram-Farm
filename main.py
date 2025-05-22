@@ -4,6 +4,7 @@ from modules.tasks import process_video
 import os
 
 def main():
+    print("START")
     TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
     TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
