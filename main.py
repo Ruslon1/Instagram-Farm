@@ -12,13 +12,15 @@ def main():
 
     print(accounts)
     print(account_to_videos)
+
     for account in accounts:
         username, password, theme = account
         videos = account_to_videos.get(theme, [])
+
         for video in videos:
-            print("RPOCESS")
+            print("PROCESS")
             process_video.delay(account, video, TELEGRAM_TOKEN, TELEGRAM_CHAT_ID)
-    print("EXIIIT")
+
 
 if __name__ == "__main__":
     os.makedirs("./videos", exist_ok=True)

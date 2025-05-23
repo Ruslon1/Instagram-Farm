@@ -1,5 +1,6 @@
 from celery import Celery
 
+
 app = Celery(
     "instagram_bot",
     broker="redis://redis:6379/0",  # Имя контейнера Redis
@@ -13,3 +14,5 @@ app.conf.update(
     timezone='UTC',
     enable_utc=True,
 )
+
+app.autodiscover_tasks(['modules.tasks'])

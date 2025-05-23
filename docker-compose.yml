@@ -13,6 +13,7 @@ services:
       - DB_PASSWORD=${DB_PASSWORD}
       - DB_HOST=${DB_HOST}
       - DB_PORT=${DB_PORT}
+      - PYTHONPATH=/app
     volumes:
       - ./videos:/app/videos
     depends_on:
@@ -32,6 +33,7 @@ services:
       - DB_PASSWORD=${DB_PASSWORD}
       - DB_HOST=${DB_HOST}
       - DB_PORT=${DB_PORT}
+      - PYTHONPATH=/app
     volumes:
       - ./videos:/app/videos
     depends_on:

@@ -25,22 +25,11 @@ def load_accounts_and_videos():
     published = cursor.fetchall()
     published_set = set(published)
 
-    # Filter videos that haven't been posted yet
     account_to_videos = {}
     for link, theme in all_videos:
-        for account in accounts:
-            username, _, account_theme = account
-            if theme == account_theme and (username, link) not in published_set:
-                if username not in account_to_videos:
-                    account_to_videos[username] = []
-                account_to_videos[username].append({"link": link, "theme": theme})
-
-    for username, videos in account_to_videos.items():
-        for video in videos:
-            video_link = video["link"]
-            video_theme = video["theme"]
-            print(f"User: {username}, Video Link: {video_link}, Theme: {video_theme}")
-
+        if theme not in account_to_videos:
+            account_to_videos[theme] = []
+        account_to_videos[theme].append(link)
 
     cursor.close()
     connection.close()
