@@ -1,6 +1,10 @@
+import asyncio
 from telegram import Bot
 
-async def telegram_notify(token, chat_id, message):
+def telegram_notify(token, chat_id, message):
+    asyncio.run(notify(token, chat_id, message))
+
+async def notify(token, chat_id, message):
     try:
         bot = Bot(token=token)
         await bot.send_message(chat_id=chat_id, text=message)
