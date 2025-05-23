@@ -16,7 +16,7 @@ def load_accounts_and_videos():
 
     cursor.execute("SELECT username, password, theme FROM accounts")
     accounts = cursor.fetchall()
-    print(accounts)
+
     cursor.execute("SELECT link, theme FROM videos")
     all_videos = cursor.fetchall()
 
@@ -33,7 +33,14 @@ def load_accounts_and_videos():
             if theme == account_theme and (username, link) not in published_set:
                 if username not in account_to_videos:
                     account_to_videos[username] = []
-                account_to_videos[username].append(link)
+                account_to_videos[username].append({"link": link, "theme": theme})
+
+    for username, videos in account_to_videos.items():
+        for video in videos:
+            video_link = video["link"]
+            video_theme = video["theme"]
+            print(f"User: {username}, Video Link: {video_link}, Theme: {video_theme}")
+
 
     cursor.close()
     connection.close()

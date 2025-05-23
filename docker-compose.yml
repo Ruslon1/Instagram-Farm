@@ -37,7 +37,7 @@ services:
     depends_on:
       - redis
       - db
-      - bot_worker
+      - bot
     command: ["python", "main.py"]
 
   redis:
