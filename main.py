@@ -16,10 +16,7 @@ def main():
     for account in accounts:
         username, password, theme = account
         videos = account_to_videos.get(theme, [])
-
-        for video in videos:
-            print("PROCESS")
-            process_video.delay(account, video, TELEGRAM_TOKEN, TELEGRAM_CHAT_ID)
+        process_video.delay(account, videos, TELEGRAM_TOKEN, TELEGRAM_CHAT_ID)
 
 
 if __name__ == "__main__":
