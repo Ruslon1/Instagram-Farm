@@ -16,7 +16,7 @@ def load_accounts_and_videos():
 
     cursor.execute("SELECT username, password, theme FROM accounts")
     accounts = cursor.fetchall()
-
+    print(accounts)
     cursor.execute("SELECT link, theme FROM videos")
     all_videos = cursor.fetchall()
 
