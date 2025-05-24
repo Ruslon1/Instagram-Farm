@@ -8,3 +8,4 @@ instagrapi
 Pillow>=8.1.1
 python-telegram-bot>=20.0
 webdriver-manager
+moviepy==1.0.3
