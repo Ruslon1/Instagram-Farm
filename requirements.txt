@@ -4,7 +4,6 @@ redis
 psycopg2-binary
 requests
 selenium
-selenium-wire
 instagrapi
 Pillow>=8.1.1
 python-telegram-bot>=20.0
