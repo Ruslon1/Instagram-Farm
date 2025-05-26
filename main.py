@@ -1,10 +1,13 @@
 from modules.database import load_accounts_and_videos
 from modules.tasks import process_video
+from modules.fetcher import fetch_trending_videos
 
 import os
 import time
 
 def main():
+    fetch_trending_videos("gym", 30)
+
     TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
     TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 

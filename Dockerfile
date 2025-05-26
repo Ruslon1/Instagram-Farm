@@ -23,11 +23,15 @@ RUN apt-get install -y \
     && mv chromedriver /usr/local/bin/ \
     && chmod +x /usr/local/bin/chromedriver \
     && rm chromedriver_linux64.zip
+    
+# Copy только requirements.txt для установки зависимостей
+COPY requirements.txt .
 
-# Copy project files
-COPY . .
-
-# Install Python dependencies
+# Установите зависимости Playwright и Python (это закешируется, если requirements.txt не меняется)
+RUN pip install --no-cache-dir playwright && playwright install
 RUN pip install --no-cache-dir -r requirements.txt
+
+# Копируйте остальные файлы проекта
+COPY . .
 
 # This Dockerfile doesn't define CMD since the docker-compose file handles commands
