@@ -3,7 +3,6 @@ import os
 
 ms_tokens = os.environ.get("MS_TOKENS", "").split(",")
 
-
 async def fetch_videos_for_hashtag(hashtag, count=5):
     video_urls = []
     async with TikTokApi() as api:

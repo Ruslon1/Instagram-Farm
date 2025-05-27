@@ -56,4 +56,3 @@ def record_video(video_link, theme):
     connection.commit()
     cursor.close()
     connection.close()
-

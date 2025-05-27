@@ -1,6 +1,6 @@
 from modules.database import load_accounts_and_videos
 from modules.tasks import process_video
-from modules.fetcher import get_hashtag_videos
+from modules.fetcher import fetch_videos_for_hashtag
 
 import os
 import time
@@ -14,6 +14,11 @@ def main():
 
     print(accounts)
     print(account_to_videos)
+
+    themes = {theme for _, _, theme in accounts}
+
+    for theme in themes:
+        asyncio.run(fetch_videos_for_hashtag(theme, 30))
 
     for account in accounts:
         username, password, theme = account
