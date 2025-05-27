@@ -20,7 +20,6 @@ def load_accounts_and_videos():
     cursor.execute("SELECT link, theme FROM videos")
     all_videos = cursor.fetchall()
 
-    # Fetch already published videos
     cursor.execute("SELECT account_username, video_link FROM publicationhistory")
     published = cursor.fetchall()
     published_set = set(published)
@@ -34,7 +33,7 @@ def load_accounts_and_videos():
     cursor.close()
     connection.close()
 
-    return accounts, account_to_videos
+    return accounts, account_to_videos, published_set
 
 def record_publication(username, video_link):
     connection = get_database_connection()
