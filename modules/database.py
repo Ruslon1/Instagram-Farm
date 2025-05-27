@@ -45,3 +45,15 @@ def record_publication(username, video_link):
     connection.commit()
     cursor.close()
     connection.close()
+
+def record_video(video_link, theme):
+    connection = get_database_connection()
+    cursor = connection.cursor()
+    cursor.execute(
+        "INSERT INTO videos (link, theme) VALUES (%s, %s)",
+        (video_link, theme)
+    )
+    connection.commit()
+    cursor.close()
+    connection.close()
+
