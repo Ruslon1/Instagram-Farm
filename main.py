@@ -4,10 +4,9 @@ from modules.fetcher import get_hashtag_videos
 
 import os
 import time
+import asyncio
 
 def main():
-    get_hashtag_videos()
-
     TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
     TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 

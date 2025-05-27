@@ -1,13 +1,18 @@
 from celery import Celery
 
+import sys
+import os
+
+sys.path.append(os.path.abspath(os.path.dirname(__file__)))
 
 app = Celery(
     "instagram_bot",
-    broker="redis://redis:6379/0",  # Имя контейнера Redis
-    backend="redis://redis:6379/0"
+    broker="redis://localhost:6379/0",  # Протокол Redis и базовый номер базы данных
+    backend="redis://localhost:6379/0"  # Протокол Redis и базовый номер базы данных
 )
 
 app.conf.update(
+    worker_pool='solo',
     task_serializer='json',
     result_serializer='json',
     accept_content=['json'],

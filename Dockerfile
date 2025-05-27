@@ -23,7 +23,7 @@ RUN apt-get install -y \
     && mv chromedriver /usr/local/bin/ \
     && chmod +x /usr/local/bin/chromedriver \
     && rm chromedriver_linux64.zip
-    
+
 # Copy только requirements.txt для установки зависимостей
 COPY requirements.txt .
 
@@ -33,5 +33,3 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Копируйте остальные файлы проекта
 COPY . .
-
-# This Dockerfile doesn't define CMD since the docker-compose file handles commands

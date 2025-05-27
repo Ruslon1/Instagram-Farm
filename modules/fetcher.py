@@ -1,5 +1,4 @@
 from TikTokApi import TikTokApi
-import asyncio
 import os
 
 ms_tokens = os.environ.get("MS_TOKENS", "").split(",")
