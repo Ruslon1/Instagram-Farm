@@ -1,3 +1,5 @@
 /video
 /__pycache__
 /videos
+/modules/__pycache__
+/.idea
