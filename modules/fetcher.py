@@ -14,9 +14,8 @@ async def fetch_videos_for_hashtag(hashtag, count=5):
         tag = api.hashtag(name=hashtag)
 
         async for video in tag.videos(count=count):
-            video_urls.append(video.url)
+            video_urls.append("https://www.tiktok.com/@/video/" + video.id)
 
-    # Check existing videos in database
     loop = asyncio.get_running_loop()
     with ThreadPoolExecutor() as pool:
         existing_links = await loop.run_in_executor(

@@ -6,17 +6,17 @@ import os
 import time
 import asyncio
 
-
 def main():
     TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
     TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
-    accounts, account_to_videos, published_set = load_accounts_and_videos()
-
+    accounts, _, _ = load_accounts_and_videos()
     themes = {theme for _, _, theme in accounts}
 
     for theme in themes:
         asyncio.run(fetch_videos_for_hashtag(theme, 30))
+
+    accounts, account_to_videos, published_set = load_accounts_and_videos()
 
     for account in accounts:
         username, password, theme = account
@@ -28,7 +28,6 @@ def main():
         ]
 
         process_video.delay(account, unpublished_videos, TELEGRAM_TOKEN, TELEGRAM_CHAT_ID)
-
 
 if __name__ == "__main__":
     os.makedirs("./videos", exist_ok=True)

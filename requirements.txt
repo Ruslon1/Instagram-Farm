@@ -12,3 +12,4 @@ moviepy==1.0.3
 TikTokApi
 playwright
 httpx
+filelock>=3.0.0
