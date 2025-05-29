@@ -11,7 +11,7 @@ import json
 
 @app.task(bind=True, max_retries=3)
 def process_video(self, account, videos, telegram_token, chat_id):
-    username, password, purpose = account
+    username, password, theme, two_fa_key = account
     captions = []
     with open("captions.json", "r") as outfile:
         captions = json.load(outfile)
@@ -33,7 +33,7 @@ def process_video(self, account, videos, telegram_token, chat_id):
             continue
 
         caption = random.choice(captions) + "\n#vlogging#beach#layingdown#whereatcomefrom#green#sand#red#ishowspeed#red#sunny#gettingtothebag#55154#subscribers#daily#wegotthis#sofunny"
-        upload_result = upload_video_to_instagram(username, password, output_path, caption, telegram_token, chat_id)
+        upload_result = upload_video_to_instagram(username, password, output_path, caption, telegram_token, chat_id, two_fa_key)
         if upload_result:
             telegram_notify(telegram_token, chat_id, f"Successfully uploaded video from: {video} to account: {username}")
             record_publication(username, video)

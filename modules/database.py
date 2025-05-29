@@ -14,7 +14,7 @@ def load_accounts_and_videos():
     connection = get_database_connection()
     cursor = connection.cursor()
 
-    cursor.execute("SELECT username, password, theme FROM accounts")
+    cursor.execute("SELECT username, password, theme, \"2FAKey\" FROM accounts")
     accounts = cursor.fetchall()
 
     cursor.execute("SELECT link, theme FROM videos")
