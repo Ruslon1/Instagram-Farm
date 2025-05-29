@@ -9,11 +9,11 @@ import time
 import hashlib
 import json
 
-@app.task
-def process_video(account, videos, telegram_token, chat_id):
+@app.task(bind=True, max_retries=3)
+def process_video(self, account, videos, telegram_token, chat_id):
     username, password, purpose = account
     captions = []
-    with open("../captions.json", "r") as outfile:
+    with open("captions.json", "r") as outfile:
         captions = json.load(outfile)
 
     for video in videos:
