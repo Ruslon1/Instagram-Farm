@@ -7,11 +7,14 @@ import os
 import random
 import time
 import hashlib
-
+import json
 
 @app.task
 def process_video(account, videos, telegram_token, chat_id):
     username, password, purpose = account
+    captions = []
+    with open("../captions.json", "r") as outfile:
+        captions = json.load(outfile)
 
     for video in videos:
         if is_video_published(username, video):
@@ -29,7 +32,7 @@ def process_video(account, videos, telegram_token, chat_id):
             telegram_notify(telegram_token, chat_id, f"Failed to download video from: {video}")
             continue
 
-        caption = f""
+        caption = random.choice(captions) + "\n#vlogging#beach#layingdown#whereatcomefrom#green#sand#red#ishowspeed#red#sunny#gettingtothebag#55154#subscribers#daily#wegotthis#sofunny"
         upload_result = upload_video_to_instagram(username, password, output_path, caption, telegram_token, chat_id)
         if upload_result:
             telegram_notify(telegram_token, chat_id, f"Successfully uploaded video from: {video} to account: {username}")
