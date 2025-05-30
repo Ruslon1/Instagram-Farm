@@ -16,6 +16,8 @@ def get_session_path(username: str) -> Path:
 def upload_video_to_instagram(username: str, password: str, video_path: str, caption: str, token: str, chat_id: str, two_fa_key: str = None) -> bool:
     try:
         cl = Client()
+        cl.delay_range = [1, 3]
+        cl.request_timeout = 30
         session_path = get_session_path(username)
 
         if session_path.exists():
@@ -41,6 +43,7 @@ def upload_video_to_instagram(username: str, password: str, video_path: str, cap
                 response = requests.get(f"https://2fa.fb.rip/api/otp/{two_fa_key}").json()
                 if response.get("ok"):
                     fa_code = response["data"]["otp"]
+                    print(username +" " + password + " "+ fa_code)
                     cl.login(username, password, verification_code=fa_code)
                 else:
                     raise Exception(f"Failed to get 2FA code: {response}")

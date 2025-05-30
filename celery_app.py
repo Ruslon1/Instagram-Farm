@@ -1,5 +1,8 @@
 from celery import Celery
+from celery.signals import worker_shutting_down
 import os
+import sys
+
 
 app = Celery(
     "instagram_bot",
@@ -15,7 +18,7 @@ app.conf.update(
     accept_content=['json'],
     timezone='UTC',
     enable_utc=True,
-    task_acks_late=True,  # Better handling of interrupted tasks
+    task_acks_late=False,  # Better handling of interrupted tasks
     broker_connection_retry_on_startup=True
 )
 

@@ -1,12 +1,9 @@
-import asyncio
-from telegram import Bot
+import requests
 
 def telegram_notify(token, chat_id, message):
-    asyncio.run(notify(token, chat_id, message))
-
-async def notify(token, chat_id, message):
     try:
-        bot = Bot(token=token)
-        await bot.send_message(chat_id=chat_id, text=message)
+        url = f"https://api.telegram.org/bot{token}/sendMessage"
+        params = {"chat_id": chat_id, "text": message}
+        requests.post(url, params=params, timeout=10)  # Таймаут 10 сек
     except Exception as e:
-        print(f"Telegram notification error: {e}")
+        print(f"Telegram error: {e}")
