@@ -34,11 +34,12 @@ def process_video(self, account, videos, telegram_token, chat_id):
 
         caption = random.choice(captions) + "\n#vlogging#beach#layingdown#whereatcomefrom#green#sand#red#ishowspeed#red#sunny#gettingtothebag#55154#subscribers#daily#wegotthis#sofunny"
         upload_result = upload_video_to_instagram(username, password, output_path, caption, telegram_token, chat_id, two_fa_key)
+        cooldown = random.randint(300, 1500)
         if upload_result:
-            telegram_notify(telegram_token, chat_id, f"Successfully uploaded video from: {video} to account: {username}")
+            telegram_notify(telegram_token, chat_id, f"Successfully uploaded video from: {video} to account: {username}. Cooldown = {cooldown} s")
             record_publication(username, video)
             os.remove(output_path)
         else:
             telegram_notify(telegram_token, chat_id, f"Failed to upload video from: {video} to account: {username}")
 
-        time.sleep(random.randint(300, 1500))
+        time.sleep(cooldown)

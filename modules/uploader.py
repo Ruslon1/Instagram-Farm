@@ -53,7 +53,6 @@ def upload_video_to_instagram(username: str, password: str, video_path: str, cap
 
         time.sleep(random.uniform(5, 15))
         cl.video_upload(video_path, caption)
-        telegram_notify(token, chat_id, f"Successfully uploaded video: {video_path} to account: {username}")
         return True
 
     except Exception as e:
