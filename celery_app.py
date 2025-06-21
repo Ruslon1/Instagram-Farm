@@ -11,14 +11,14 @@ app = Celery(
 )
 
 app.conf.update(
-    worker_pool='gevent',  # Changed from 'solo' to 'gevent'
-    worker_concurrency=4,  # Number of concurrent workers
+    worker_pool='gevent',
+    worker_concurrency=4,
     task_serializer='json',
     result_serializer='json',
     accept_content=['json'],
     timezone='UTC',
     enable_utc=True,
-    task_acks_late=False,  # Better handling of interrupted tasks
+    task_acks_late=False,
     broker_connection_retry_on_startup=True
 )
 

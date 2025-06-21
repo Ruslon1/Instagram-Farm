@@ -1,4 +1,4 @@
-from modules.database import load_accounts_and_videos
+from modules.database import load_accounts_and_videos, init_database
 from modules.tasks import process_video
 from modules.fetcher import fetch_videos_for_hashtag
 from celery_app import app
@@ -9,6 +9,9 @@ import asyncio
 
 
 def main():
+    # Initialize database on startup
+    init_database()
+
     app.control.purge()
     TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
     TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
@@ -16,8 +19,9 @@ def main():
     accounts, _, _ = load_accounts_and_videos()
     themes = {theme for _, _, theme, _ in accounts}
 
-    #for theme in themes:
-        #asyncio.run(fetch_videos_for_hashtag(theme, 30))
+    # Uncomment to fetch new videos
+    # for theme in themes:
+    #     asyncio.run(fetch_videos_for_hashtag(theme, 30))
 
     accounts, account_to_videos, published_set = load_accounts_and_videos()
     for account in accounts:
@@ -28,7 +32,8 @@ def main():
             video for video in videos
             if (username, video) not in published_set
         ]
-        process_video.delay((username, password, theme, two_fa_key), unpublished_videos, TELEGRAM_TOKEN, TELEGRAM_CHAT_ID)
+        process_video.delay((username, password, theme, two_fa_key), unpublished_videos, TELEGRAM_TOKEN,
+                            TELEGRAM_CHAT_ID)
 
 
 if __name__ == "__main__":
