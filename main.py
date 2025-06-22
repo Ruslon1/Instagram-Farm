@@ -1,42 +1,50 @@
-from modules.database import load_accounts_and_videos, init_database
-from modules.tasks import process_video
-from modules.fetcher import fetch_videos_for_hashtag
-from celery_app import app
-
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 import os
-import time
-import asyncio
 
+# Import API routers
+from api.accounts import router as accounts_router
+from api.videos import router as videos_router
+from api.tasks import router as tasks_router
+from api.stats import router as stats_router
 
-def main():
-    # Initialize database on startup
+# Import existing modules for initialization
+from modules.database import init_database
+
+# Initialize FastAPI
+app = FastAPI(
+    title="Instagram Bot API",
+    description="Web interface for Instagram Bot",
+    version="1.0.0"
+)
+
+# CORS for frontend
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Include API routers
+app.include_router(accounts_router, prefix="/api/accounts", tags=["accounts"])
+app.include_router(videos_router, prefix="/api/videos", tags=["videos"])
+app.include_router(tasks_router, prefix="/api/tasks", tags=["tasks"])
+app.include_router(stats_router, prefix="/api/stats", tags=["statistics"])
+
+# Initialize on startup
+@app.on_event("startup")
+async def startup():
     init_database()
+    os.makedirs("videos", exist_ok=True)
+    os.makedirs("sessions", exist_ok=True)
+    print("✅ FastAPI server started")
 
-    app.control.purge()
-    TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
-    TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
-
-    accounts, _, _ = load_accounts_and_videos()
-    themes = {theme for _, _, theme, _ in accounts}
-
-    # Uncomment to fetch new videos
-    # for theme in themes:
-    #     asyncio.run(fetch_videos_for_hashtag(theme, 30))
-
-    accounts, account_to_videos, published_set = load_accounts_and_videos()
-    for account in accounts:
-        username, password, theme, two_fa_key = account
-        videos = account_to_videos.get(theme, [])
-
-        unpublished_videos = [
-            video for video in videos
-            if (username, video) not in published_set
-        ]
-        process_video.delay((username, password, theme, two_fa_key), unpublished_videos, TELEGRAM_TOKEN,
-                            TELEGRAM_CHAT_ID)
-
+@app.get("/")
+async def root():
+    return {"message": "Instagram Bot API", "status": "running"}
 
 if __name__ == "__main__":
-    os.makedirs("./videos", exist_ok=True)
-    time.sleep(1)
-    main()
+    import uvicorn
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
