@@ -1,5 +1,5 @@
 import axios from 'axios';
-import type { Account, AccountCreate, Video, TaskLog, Stats, FetchRequest, UploadRequest } from '../types';
+import type { Account, AccountCreate, Video, TaskLog, Stats, FetchRequest, UploadRequest, TikTokSource, TikTokSourceCreate } from '../types';
 
 const api = axios.create({
   baseURL: 'http://localhost:8000/api',
@@ -27,6 +27,43 @@ export const videosApi = {
     params.append('limit', limit.toString());
 
     const response = await api.get(`/videos?${params}`);
+    return response.data;
+  },
+};
+
+// TikTok Sources API
+export const tikTokSourcesApi = {
+  getAll: async (theme?: string, activeOnly = true): Promise<TikTokSource[]> => {
+    const params = new URLSearchParams();
+    if (theme) params.append('theme', theme);
+    params.append('active_only', activeOnly.toString());
+
+    const response = await api.get(`/tiktok-sources?${params}`);
+    return response.data;
+  },
+
+  create: async (source: TikTokSourceCreate): Promise<TikTokSource> => {
+    const response = await api.post('/tiktok-sources', source);
+    return response.data;
+  },
+
+  update: async (id: number, source: Partial<TikTokSourceCreate>): Promise<TikTokSource> => {
+    const response = await api.put(`/tiktok-sources/${id}`, source);
+    return response.data;
+  },
+
+  delete: async (id: number): Promise<{ message: string }> => {
+    const response = await api.delete(`/tiktok-sources/${id}`);
+    return response.data;
+  },
+
+  getThemes: async (): Promise<{ themes: string[] }> => {
+    const response = await api.get('/tiktok-sources/themes');
+    return response.data;
+  },
+
+  getByTheme: async (theme: string): Promise<TikTokSource[]> => {
+    const response = await api.get(`/tiktok-sources/by-theme/${theme}`);
     return response.data;
   },
 };

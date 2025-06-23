@@ -6,6 +6,7 @@ import {
   Video,
   Activity,
   Instagram,
+  UserPlus,
 } from 'lucide-react';
 
 interface LayoutProps {
@@ -19,6 +20,7 @@ const Layout = ({ children }: LayoutProps) => {
     { name: 'Dashboard', href: '/', icon: LayoutDashboard },
     { name: 'Accounts', href: '/accounts', icon: Users },
     { name: 'Videos', href: '/videos', icon: Video },
+    { name: 'TikTok Sources', href: '/sources', icon: UserPlus },
     { name: 'Tasks', href: '/tasks', icon: Activity },
   ];
 

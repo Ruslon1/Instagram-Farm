@@ -5,6 +5,7 @@ import Layout from './components/Layout';
 import Dashboard from './pages/Dashboard';
 import Accounts from './pages/Accounts';
 import Videos from './pages/Videos';
+import TikTokSources from './pages/TikTokSources';
 import Tasks from './pages/Tasks';
 
 const queryClient = new QueryClient({
@@ -26,6 +27,7 @@ function App() {
               <Route path="/" element={<Dashboard />} />
               <Route path="/accounts" element={<Accounts />} />
               <Route path="/videos" element={<Videos />} />
+              <Route path="/sources" element={<TikTokSources />} />
               <Route path="/tasks" element={<Tasks />} />
             </Routes>
           </Layout>

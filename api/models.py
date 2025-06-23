@@ -1,5 +1,6 @@
 from pydantic import BaseModel
 from typing import List, Optional
+from datetime import datetime
 
 # Account models
 class Account(BaseModel):
@@ -21,6 +22,26 @@ class Video(BaseModel):
     theme: str
     status: str = "pending"
     created_at: Optional[str] = None
+
+# TikTok Source models
+class TikTokSource(BaseModel):
+    id: int
+    theme: str
+    tiktok_username: str
+    active: bool = True
+    last_fetch: Optional[str] = None
+    videos_count: int = 0
+    created_at: str
+
+class TikTokSourceCreate(BaseModel):
+    theme: str
+    tiktok_username: str
+    active: bool = True
+
+class TikTokSourceUpdate(BaseModel):
+    theme: Optional[str] = None
+    tiktok_username: Optional[str] = None
+    active: Optional[bool] = None
 
 # Task models
 class FetchRequest(BaseModel):

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Play, ExternalLink, Filter, Download } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { videosApi, tasksApi } from '../services/api';
+import { videosApi, tasksApi, tikTokSourcesApi } from '../services/api';
 import type { FetchRequest } from '../types';
 
 const Videos = () => {
@@ -10,7 +10,7 @@ const Videos = () => {
   const [showFetchForm, setShowFetchForm] = useState(false);
   const [fetchData, setFetchData] = useState<FetchRequest>({
     theme: '',
-    source_usernames: [''],
+    source_usernames: [],
     videos_per_account: 10,
   });
 
@@ -19,6 +19,18 @@ const Videos = () => {
   const { data: videos, isLoading, error } = useQuery({
     queryKey: ['videos', selectedTheme],
     queryFn: () => videosApi.getAll(selectedTheme || undefined),
+  });
+
+  const { data: themesData } = useQuery({
+    queryKey: ['themes'],
+    queryFn: tikTokSourcesApi.getThemes,
+  });
+
+  // Get TikTok sources for selected theme
+  const { data: availableSources } = useQuery({
+    queryKey: ['tiktok-sources-by-theme', fetchData.theme],
+    queryFn: () => fetchData.theme ? tikTokSourcesApi.getByTheme(fetchData.theme) : Promise.resolve([]),
+    enabled: !!fetchData.theme,
   });
 
   const fetchMutation = useMutation({
@@ -37,40 +49,32 @@ const Videos = () => {
   const handleFetchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
-    const validSources = fetchData.source_usernames.filter(username => username.trim());
-    if (!fetchData.theme || validSources.length === 0) {
-      toast.error('Please provide theme and at least one TikTok username');
+    if (!fetchData.theme || fetchData.source_usernames.length === 0) {
+      toast.error('Please select theme and at least one TikTok source');
       return;
     }
 
-    fetchMutation.mutate({
-      ...fetchData,
-      source_usernames: validSources,
-    });
+    fetchMutation.mutate(fetchData);
   };
 
-  const addSourceInput = () => {
+  const handleThemeChange = (theme: string) => {
     setFetchData({
       ...fetchData,
-      source_usernames: [...fetchData.source_usernames, ''],
+      theme,
+      source_usernames: [], // Reset selected sources when theme changes
     });
   };
 
-  const updateSourceInput = (index: number, value: string) => {
-    const newSources = [...fetchData.source_usernames];
-    newSources[index] = value;
-    setFetchData({
-      ...fetchData,
-      source_usernames: newSources,
-    });
-  };
-
-  const removeSourceInput = (index: number) => {
-    if (fetchData.source_usernames.length > 1) {
-      const newSources = fetchData.source_usernames.filter((_, i) => i !== index);
+  const handleSourceToggle = (username: string, checked: boolean) => {
+    if (checked) {
       setFetchData({
         ...fetchData,
-        source_usernames: newSources,
+        source_usernames: [...fetchData.source_usernames, username],
+      });
+    } else {
+      setFetchData({
+        ...fetchData,
+        source_usernames: fetchData.source_usernames.filter(u => u !== username),
       });
     }
   };
@@ -90,7 +94,7 @@ const Videos = () => {
     }
   };
 
-  const themes = [...new Set(videos?.map(video => video.theme) || [])];
+  const themes = themesData?.themes || [];
 
   if (isLoading) {
     return (
@@ -213,48 +217,74 @@ const Videos = () => {
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Theme *
                 </label>
-                <input
-                  type="text"
+                <select
                   value={fetchData.theme}
-                  onChange={(e) => setFetchData({ ...fetchData, theme: e.target.value })}
+                  onChange={(e) => handleThemeChange(e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="e.g., ishowspeed, gaming"
                   required
-                />
+                >
+                  <option value="">Select theme...</option>
+                  {themes.map(theme => (
+                    <option key={theme} value={theme}>{theme}</option>
+                  ))}
+                </select>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  TikTok Usernames *
-                </label>
-                {fetchData.source_usernames.map((username, index) => (
-                  <div key={index} className="flex items-center space-x-2 mb-2">
-                    <input
-                      type="text"
-                      value={username}
-                      onChange={(e) => updateSourceInput(index, e.target.value)}
-                      className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      placeholder="TikTok username (without @)"
-                    />
-                    {fetchData.source_usernames.length > 1 && (
+              {fetchData.theme && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    TikTok Sources *
+                  </label>
+                  {availableSources && availableSources.length > 0 ? (
+                    <div className="max-h-40 overflow-y-auto border border-gray-300 rounded-md">
+                      {availableSources.map((source) => (
+                        <label key={source.id} className="flex items-center p-3 hover:bg-gray-50 border-b border-gray-100 last:border-b-0">
+                          <input
+                            type="checkbox"
+                            checked={fetchData.source_usernames.includes(source.tiktok_username)}
+                            onChange={(e) => handleSourceToggle(source.tiktok_username, e.target.checked)}
+                            className="mr-3 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                          />
+                          <div className="flex-1">
+                            <span className="text-sm font-medium text-gray-900">@{source.tiktok_username}</span>
+                            <div className="text-xs text-gray-500">
+                              {source.videos_count} videos fetched
+                              {source.last_fetch && ` • Last: ${new Date(source.last_fetch).toLocaleDateString()}`}
+                            </div>
+                          </div>
+                        </label>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="p-4 text-center text-gray-500 border border-gray-300 rounded-md">
+                      <p>No TikTok sources found for theme "{fetchData.theme}"</p>
+                      <p className="text-xs mt-1">Add sources in the TikTok Sources page first</p>
+                    </div>
+                  )}
+
+                  {availableSources && availableSources.length > 0 && (
+                    <div className="mt-2 flex justify-between text-xs text-gray-500">
+                      <span>{fetchData.source_usernames.length} selected</span>
                       <button
                         type="button"
-                        onClick={() => removeSourceInput(index)}
-                        className="text-red-600 hover:text-red-800"
+                        onClick={() => {
+                          if (fetchData.source_usernames.length === availableSources.length) {
+                            setFetchData({ ...fetchData, source_usernames: [] });
+                          } else {
+                            setFetchData({
+                              ...fetchData,
+                              source_usernames: availableSources.map(s => s.tiktok_username)
+                            });
+                          }
+                        }}
+                        className="text-blue-600 hover:text-blue-800"
                       >
-                        ✕
+                        {fetchData.source_usernames.length === availableSources.length ? 'Deselect All' : 'Select All'}
                       </button>
-                    )}
-                  </div>
-                ))}
-                <button
-                  type="button"
-                  onClick={addSourceInput}
-                  className="text-blue-600 hover:text-blue-800 text-sm"
-                >
-                  + Add another username
-                </button>
-              </div>
+                    </div>
+                  )}
+                </div>
+              )}
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -280,10 +310,10 @@ const Videos = () => {
                 </button>
                 <button
                   type="submit"
-                  disabled={fetchMutation.isPending}
+                  disabled={fetchMutation.isPending || fetchData.source_usernames.length === 0}
                   className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
                 >
-                  {fetchMutation.isPending ? 'Fetching...' : 'Fetch Videos'}
+                  {fetchMutation.isPending ? 'Fetching...' : `Fetch from ${fetchData.source_usernames.length} Sources`}
                 </button>
               </div>
             </form>

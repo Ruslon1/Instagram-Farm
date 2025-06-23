@@ -7,6 +7,7 @@ from api.accounts import router as accounts_router
 from api.videos import router as videos_router
 from api.tasks import router as tasks_router
 from api.stats import router as stats_router
+from api.tiktok_sources import router as tiktok_sources_router
 
 # Import existing modules for initialization
 from modules.database import init_database
@@ -32,6 +33,7 @@ app.include_router(accounts_router, prefix="/api/accounts", tags=["accounts"])
 app.include_router(videos_router, prefix="/api/videos", tags=["videos"])
 app.include_router(tasks_router, prefix="/api/tasks", tags=["tasks"])
 app.include_router(stats_router, prefix="/api/stats", tags=["statistics"])
+app.include_router(tiktok_sources_router, prefix="/api/tiktok-sources", tags=["tiktok-sources"])
 
 # Initialize on startup
 @app.on_event("startup")

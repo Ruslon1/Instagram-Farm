@@ -20,6 +20,22 @@ export interface Video {
   created_at?: string;
 }
 
+export interface TikTokSource {
+  id: number;
+  theme: string;
+  tiktok_username: string;
+  active: boolean;
+  last_fetch?: string;
+  videos_count: number;
+  created_at: string;
+}
+
+export interface TikTokSourceCreate {
+  theme: string;
+  tiktok_username: string;
+  active: boolean;
+}
+
 export interface TaskLog {
   id: string;
   task_type: string;
