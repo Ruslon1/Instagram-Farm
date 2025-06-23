@@ -1,99 +1,120 @@
 #!/usr/bin/env python3
 """
-Fix videos table structure
+Migration script to add tiktok_sources table and update task_logs
 """
 
 from modules.database import get_database_connection
 
 
-def fix_videos_table():
-    """Add missing columns to videos table"""
+def migrate_database():
+    """Add tiktok_sources table and update task_logs structure"""
 
     with get_database_connection() as conn:
         cursor = conn.cursor()
 
-        print("🔧 Fixing videos table structure...")
+        print("📊 Adding tiktok_sources table...")
 
-        # Check current table structure
-        cursor.execute("PRAGMA table_info(videos)")
+        # Create tiktok_sources table
+        cursor.execute('''
+                       CREATE TABLE IF NOT EXISTS tiktok_sources
+                       (
+                           id
+                           INTEGER
+                           PRIMARY
+                           KEY
+                           AUTOINCREMENT,
+                           theme
+                           TEXT
+                           NOT
+                           NULL,
+                           tiktok_username
+                           TEXT
+                           NOT
+                           NULL,
+                           active
+                           BOOLEAN
+                           DEFAULT
+                           TRUE,
+                           last_fetch
+                           TIMESTAMP,
+                           videos_count
+                           INTEGER
+                           DEFAULT
+                           0,
+                           created_at
+                           TIMESTAMP
+                           DEFAULT
+                           CURRENT_TIMESTAMP,
+                           UNIQUE
+                       (
+                           theme,
+                           tiktok_username
+                       )
+                           )
+                       ''')
+
+        # Update task_logs table with progress fields
+        print("📊 Updating task_logs table...")
+
+        # Check current columns
+        cursor.execute("PRAGMA table_info(task_logs)")
         columns = [row[1] for row in cursor.fetchall()]
-        print(f"Current columns: {columns}")
 
-        # Add missing columns if they don't exist
-        missing_columns = [
-            ("status", "TEXT DEFAULT 'pending'"),
-            ("title", "TEXT"),
-            ("author", "TEXT"),
-            ("views", "INTEGER DEFAULT 0"),
-            ("likes", "INTEGER DEFAULT 0"),
-            ("duration", "INTEGER"),
-            ("created_at", "TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
+        # Add new columns if they don't exist
+        new_columns = [
+            ("progress", "INTEGER DEFAULT 0"),
+            ("total_items", "INTEGER DEFAULT 0"),
+            ("current_item", "TEXT"),
+            ("next_action_at", "TIMESTAMP"),
+            ("cooldown_seconds", "INTEGER")
         ]
 
-        for column_name, column_def in missing_columns:
+        for column_name, column_def in new_columns:
             if column_name not in columns:
                 try:
-                    cursor.execute(f"ALTER TABLE videos ADD COLUMN {column_name} {column_def}")
+                    cursor.execute(f"ALTER TABLE task_logs ADD COLUMN {column_name} {column_def}")
                     print(f"  ✅ Added column: {column_name}")
                 except Exception as e:
                     print(f"  ❌ Failed to add {column_name}: {e}")
 
-        # Add ID column if it doesn't exist (for better management)
-        if "id" not in columns:
-            print("🔄 Recreating videos table with ID column...")
+        # Create indexes
+        cursor.execute('''
+                       CREATE INDEX IF NOT EXISTS idx_tiktok_sources_theme
+                           ON tiktok_sources(theme)
+                       ''')
 
-            # Create new table with proper structure
-            cursor.execute('''
-                           CREATE TABLE videos_new
-                           (
-                               id         INTEGER PRIMARY KEY AUTOINCREMENT,
-                               link       TEXT NOT NULL,
-                               theme      TEXT NOT NULL,
-                               title      TEXT,
-                               author     TEXT,
-                               views      INTEGER   DEFAULT 0,
-                               likes      INTEGER   DEFAULT 0,
-                               duration   INTEGER,
-                               status     TEXT      DEFAULT 'pending',
-                               created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                               UNIQUE (link, theme)
-                           )
-                           ''')
+        cursor.execute('''
+                       CREATE INDEX IF NOT EXISTS idx_tiktok_sources_active
+                           ON tiktok_sources(active)
+                       ''')
 
-            # Copy data from old table
-            cursor.execute('''
-                           INSERT INTO videos_new (link, theme, status, created_at)
-                           SELECT link,
-                                  theme,
-                                  COALESCE(status, 'pending')             as status,
-                                  COALESCE(created_at, CURRENT_TIMESTAMP) as created_at
-                           FROM videos
-                           ''')
+        # Insert some default sources if table is empty
+        cursor.execute("SELECT COUNT(*) FROM tiktok_sources")
+        count = cursor.fetchone()[0]
 
-            # Drop old table and rename new one
-            cursor.execute("DROP TABLE videos")
-            cursor.execute("ALTER TABLE videos_new RENAME TO videos")
+        if count == 0:
+            print("📝 Adding default TikTok sources...")
 
-            print("  ✅ Recreated videos table with ID column")
+            default_sources = [
+                ("ishowspeed", "ishowdailyupdate3", True),
+                ("ishowspeed", "speedyupdates", True),
+                ("ishowspeed", "ishowspeedclips", True),
+                ("gaming", "gamingclips", True),
+                ("funny", "funnymoments", True),
+                ("funny", "viralvideos", True),
+            ]
 
-        # Create indexes for better performance
-        try:
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_videos_theme ON videos(theme)")
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_videos_status ON videos(status)")
-            print("  ✅ Created indexes")
-        except Exception as e:
-            print(f"  ⚠️ Index creation warning: {e}")
+            for theme, username, active in default_sources:
+                cursor.execute('''
+                               INSERT
+                               OR IGNORE INTO tiktok_sources (theme, tiktok_username, active)
+                    VALUES (?, ?, ?)
+                               ''', (theme, username, active))
+                print(f"  ➕ Added {username} for theme '{theme}'")
 
         conn.commit()
-        print("✅ Videos table fixed successfully!")
-
-        # Show final structure
-        cursor.execute("PRAGMA table_info(videos)")
-        final_columns = [(row[1], row[2]) for row in cursor.fetchall()]
-        print(f"Final table structure:")
-        for col_name, col_type in final_columns:
-            print(f"  - {col_name}: {col_type}")
+        print("✅ Migration completed successfully!")
 
 
 if __name__ == "__main__":
-    fix_videos_table()
+    migrate_database()

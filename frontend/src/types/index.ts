@@ -43,6 +43,23 @@ export interface TaskLog {
   created_at: string;
   account_username?: string;
   message?: string;
+  progress?: number;
+  total_items?: number;
+  current_item?: string;
+  next_action_at?: string;
+  cooldown_seconds?: number;
+}
+
+export interface TaskProgress {
+  task_id: string;
+  status: string;
+  progress: number;
+  total_items: number;
+  current_item?: string;
+  message?: string;
+  account_username?: string;
+  remaining_cooldown?: number;
+  created_at: string;
 }
 
 export interface Stats {

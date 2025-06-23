@@ -60,6 +60,11 @@ class TaskLog(BaseModel):
     created_at: str
     account_username: Optional[str] = None
     message: Optional[str] = None
+    progress: Optional[int] = None
+    total_items: Optional[int] = None
+    current_item: Optional[str] = None
+    next_action_at: Optional[str] = None
+    cooldown_seconds: Optional[int] = None
 
 # Response models
 class StatsResponse(BaseModel):
@@ -67,3 +72,14 @@ class StatsResponse(BaseModel):
     pending_videos: int
     posts_today: int
     running_tasks: int
+
+# Upload progress response
+class UploadProgress(BaseModel):
+    task_id: str
+    account_username: str
+    current_video: str
+    progress: int
+    total_videos: int
+    status: str
+    message: str
+    next_upload_in: Optional[int] = None  # seconds until next upload

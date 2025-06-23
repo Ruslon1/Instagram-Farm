@@ -1,5 +1,5 @@
 import axios from 'axios';
-import type { Account, AccountCreate, Video, TaskLog, Stats, FetchRequest, UploadRequest, TikTokSource, TikTokSourceCreate } from '../types';
+import type { Account, AccountCreate, Video, TaskLog, Stats, FetchRequest, UploadRequest, TikTokSource, TikTokSourceCreate, TaskProgress } from '../types';
 
 const api = axios.create({
   baseURL: 'http://localhost:8000/api',
@@ -84,8 +84,18 @@ export const tasksApi = {
     return response.data;
   },
 
-  uploadVideos: async (request: UploadRequest): Promise<{ success: boolean; task_id: string; celery_task_id: string; message: string }> => {
+  uploadVideos: async (request: UploadRequest): Promise<{ success: boolean; task_id: string; celery_task_id: string; message: string; total_videos: number; account: string }> => {
     const response = await api.post('/tasks/upload', request);
+    return response.data;
+  },
+
+  getProgress: async (taskId: string): Promise<TaskProgress> => {
+    const response = await api.get(`/tasks/${taskId}/progress`);
+    return response.data;
+  },
+
+  cancelTask: async (taskId: string): Promise<{ message: string }> => {
+    const response = await api.post(`/tasks/${taskId}/cancel`);
     return response.data;
   },
 };
