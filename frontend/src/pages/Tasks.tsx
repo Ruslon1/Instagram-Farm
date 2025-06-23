@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Upload, Activity, RefreshCw, Filter } from 'lucide-react';
+import { Upload, Activity, RefreshCw, Filter, StopCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { tasksApi, accountsApi, videosApi } from '../services/api';
 import TaskProgressCard from '../components/TaskProgressCard';
@@ -45,6 +45,22 @@ const Tasks = () => {
     },
   });
 
+  // Mass cancel all running tasks
+  const cancelAllMutation = useMutation({
+    mutationFn: async () => {
+      const runningTasks = tasks?.filter(task => task.status === 'running') || [];
+      const cancelPromises = runningTasks.map(task => tasksApi.cancelTask(task.id));
+      return Promise.all(cancelPromises);
+    },
+    onSuccess: (results) => {
+      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      toast.success(`Cancelled ${results.length} running tasks`);
+    },
+    onError: (error: any) => {
+      toast.error('Failed to cancel some tasks: ' + error);
+    },
+  });
+
   const handleUploadSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -64,6 +80,18 @@ const Tasks = () => {
   const refreshTasks = () => {
     queryClient.invalidateQueries({ queryKey: ['tasks'] });
     toast.success('Tasks refreshed');
+  };
+
+  const handleCancelAll = () => {
+    const runningCount = tasks?.filter(task => task.status === 'running').length || 0;
+    if (runningCount === 0) {
+      toast.error('No running tasks to cancel');
+      return;
+    }
+
+    if (confirm(`Are you sure you want to cancel all ${runningCount} running tasks? This cannot be undone.`)) {
+      cancelAllMutation.mutate();
+    }
   };
 
   // Get pending videos for selected account
@@ -94,6 +122,16 @@ const Tasks = () => {
           <p className="text-gray-600">Monitor and manage bot operations</p>
         </div>
         <div className="flex space-x-3">
+          {runningTasks.length > 0 && (
+            <button
+              onClick={handleCancelAll}
+              disabled={cancelAllMutation.isPending}
+              className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 flex items-center disabled:opacity-50"
+            >
+              <StopCircle className="w-4 h-4 mr-2" />
+              Cancel All ({runningTasks.length})
+            </button>
+          )}
           <button
             onClick={refreshTasks}
             className="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 flex items-center"
@@ -129,16 +167,26 @@ const Tasks = () => {
           <span className="text-sm text-gray-500">
             {tasks?.length || 0} tasks • {runningTasks.length} running
           </span>
+          {runningTasks.length > 0 && (
+            <span className="text-sm text-blue-600 animate-pulse">
+              • Live updates every 5s
+            </span>
+          )}
         </div>
       </div>
 
       {/* Running Tasks */}
       {runningTasks.length > 0 && (
         <div className="space-y-4">
-          <h2 className="text-lg font-semibold text-gray-900 flex items-center">
-            <Activity className="w-5 h-5 mr-2 text-blue-600" />
-            Active Tasks ({runningTasks.length})
-          </h2>
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold text-gray-900 flex items-center">
+              <Activity className="w-5 h-5 mr-2 text-blue-600" />
+              Active Tasks ({runningTasks.length})
+            </h2>
+            <div className="text-sm text-gray-600 bg-blue-50 px-3 py-1 rounded-full">
+              🔴 Live monitoring active
+            </div>
+          </div>
           <div className="space-y-3">
             {runningTasks.map((task) => (
               <TaskProgressCard key={task.id} task={task} />
@@ -271,7 +319,7 @@ const Tasks = () => {
               <div className="bg-blue-50 p-3 rounded-md">
                 <p className="text-sm text-blue-800">
                   <strong>Note:</strong> Videos will be uploaded with random cooldowns (5-25 minutes) between uploads for safety.
-                  You can monitor the progress in real-time on this page.
+                  You can monitor the progress in real-time and cancel at any time.
                 </p>
               </div>
 

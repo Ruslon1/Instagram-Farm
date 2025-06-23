@@ -183,17 +183,27 @@ async def get_task_progress(task_id: str):
 async def cancel_task(task_id: str):
     """Cancel a running task"""
     try:
-        # Update task status to cancelled
+        # Check if task exists and is running
+        task = await TaskService.get_task_progress(task_id)
+        if not task:
+            raise HTTPException(status_code=404, detail="Task not found")
+
+        if task.status != "running":
+            return {"message": f"Task {task_id} is not running (status: {task.status})"}
+
+        # Update task status to cancelled immediately
         await TaskService.update_task_status(
             task_id=task_id,
             status="cancelled",
-            message="Task cancelled by user"
+            message="Task cancelled by user request"
         )
 
-        # TODO: Implement actual Celery task cancellation if needed
-        # This would require storing and managing Celery task IDs
+        # Note: The actual Celery task will check this status and stop itself
+        # when it next calls check_if_cancelled()
 
-        return {"message": f"Task {task_id} cancelled"}
+        return {"message": f"Task {task_id} cancellation requested"}
 
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to cancel task: {str(e)}")

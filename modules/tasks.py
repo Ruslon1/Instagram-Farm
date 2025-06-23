@@ -12,10 +12,14 @@ import hashlib
 import json
 import asyncio
 from datetime import datetime
+from celery.exceptions import Ignore
 
 
 class ProgressTask(Task):
-    """Custom Celery task with progress tracking"""
+    """Custom Celery task with progress tracking and cancellation support"""
+
+    def __init__(self):
+        self.should_stop = False
 
     def update_progress(self, current: int, total: int, current_item: str, cooldown: int = None):
         """Update task progress with detailed info"""
@@ -32,6 +36,23 @@ class ProgressTask(Task):
             current_item=current_item,
             message=message,
             cooldown_seconds=cooldown
+        ))
+
+    def check_if_cancelled(self):
+        """Check if task should be cancelled"""
+        task_info = asyncio.run(TaskService.get_task_progress(self.request.id))
+        if task_info and task_info.status == "cancelled":
+            self.should_stop = True
+            return True
+        return False
+
+    def cancel_task(self):
+        """Cancel the current task"""
+        self.should_stop = True
+        asyncio.run(TaskService.update_task_status(
+            task_id=self.request.id,
+            status="cancelled",
+            message="Task cancelled by user"
         ))
 
 
@@ -76,10 +97,10 @@ def process_video(self, account, videos, telegram_token, chat_id):
         time.sleep(cooldown)
 
 
-# New enhanced function with detailed progress tracking
+# New enhanced function with detailed progress tracking and cancellation
 @app.task(bind=True, base=ProgressTask, max_retries=3)
 def process_video_with_progress(self, account, videos, telegram_token, chat_id):
-    """Enhanced video processing with detailed progress tracking"""
+    """Enhanced video processing with detailed progress tracking and cancellation support"""
     username, password, theme, two_fa_key = account
 
     # Initialize progress tracking
@@ -109,6 +130,12 @@ def process_video_with_progress(self, account, videos, telegram_token, chat_id):
     failed_count = 0
 
     for i, video in enumerate(videos, 1):
+        # Check for cancellation at the start of each video
+        if self.check_if_cancelled():
+            telegram_notify(telegram_token, chat_id,
+                            f"🛑 Upload task cancelled for @{username} after {i - 1}/{total_videos} videos")
+            raise Ignore()
+
         current_video_name = f"Video {i}"
 
         try:
@@ -124,6 +151,12 @@ def process_video_with_progress(self, account, videos, telegram_token, chat_id):
                     message=f"Skipped {current_video_name} (already posted)"
                 ))
                 continue
+
+            # Check for cancellation before download
+            if self.check_if_cancelled():
+                telegram_notify(telegram_token, chat_id,
+                                f"🛑 Upload task cancelled for @{username} during {current_video_name}")
+                raise Ignore()
 
             # Update progress - getting download link
             self.update_progress(i, total_videos, f"Getting download link for {current_video_name}")
@@ -157,6 +190,17 @@ def process_video_with_progress(self, account, videos, telegram_token, chat_id):
                 ))
                 telegram_notify(telegram_token, chat_id, f"❌ Failed to download: {video}")
                 continue
+
+            # Check for cancellation before upload
+            if self.check_if_cancelled():
+                # Clean up downloaded file
+                try:
+                    os.remove(output_path)
+                except:
+                    pass
+                telegram_notify(telegram_token, chat_id,
+                                f"🛑 Upload task cancelled for @{username} before uploading {current_video_name}")
+                raise Ignore()
 
             # Update progress - uploading to Instagram
             self.update_progress(i, total_videos, f"Uploading {current_video_name} to Instagram")
@@ -204,11 +248,17 @@ def process_video_with_progress(self, account, videos, telegram_token, chat_id):
                     f"⏱️ Cooldown: {cooldown}s"
                 )
 
-                # Wait cooldown period with live updates
+                # Wait cooldown period with live updates and cancellation checks
                 if cooldown > 0:
                     remaining = cooldown
                     while remaining > 0:
-                        wait_time = min(30, remaining)
+                        # Check for cancellation during cooldown
+                        if self.check_if_cancelled():
+                            telegram_notify(telegram_token, chat_id,
+                                            f"🛑 Upload task cancelled for @{username} during cooldown")
+                            raise Ignore()
+
+                        wait_time = min(10, remaining)  # Check every 10 seconds instead of 30
                         time.sleep(wait_time)
                         remaining -= wait_time
 
@@ -235,6 +285,9 @@ def process_video_with_progress(self, account, videos, telegram_token, chat_id):
                 except:
                     pass
 
+        except Ignore:
+            # Task was cancelled, re-raise to stop execution
+            raise
         except Exception as e:
             failed_count += 1
             error_msg = f"Error processing {current_video_name}: {str(e)}"
