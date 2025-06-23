@@ -1,0 +1,48 @@
+export interface Account {
+  username: string;
+  theme: string;
+  status: string;
+  posts_count: number;
+  last_login?: string;
+}
+
+export interface AccountCreate {
+  username: string;
+  password: string;
+  theme: string;
+  two_fa_key?: string;
+}
+
+export interface Video {
+  link: string;
+  theme: string;
+  status: string;
+  created_at?: string;
+}
+
+export interface TaskLog {
+  id: string;
+  task_type: string;
+  status: string;
+  created_at: string;
+  account_username?: string;
+  message?: string;
+}
+
+export interface Stats {
+  active_accounts: number;
+  pending_videos: number;
+  posts_today: number;
+  running_tasks: number;
+}
+
+export interface FetchRequest {
+  theme: string;
+  source_usernames: string[];
+  videos_per_account: number;
+}
+
+export interface UploadRequest {
+  account_username: string;
+  video_links: string[];
+}

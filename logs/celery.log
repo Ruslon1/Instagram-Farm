@@ -1,4 +1,4 @@
-[2025-06-22 19:40:47,728: WARNING/MainProcess] /Users/ruslan/Projects/Instagram-Upload-BOT/.venv/lib/python3.11/site-packages/celery/worker/components.py:139: UserWarning: 
+[2025-06-23 11:21:03,053: WARNING/MainProcess] /Users/ruslan/Projects/Instagram-Upload-BOT/.venv/lib/python3.11/site-packages/celery/worker/components.py:139: UserWarning: 
 The worker_pool setting shouldn't be used to select the eventlet/gevent
 pools, instead you *must use the -P* argument so that patches are applied
 as early as possible.
@@ -8,10 +8,10 @@ as early as possible.
  
  -------------- celery@Ruslans-MacBook-Pro.local v5.5.3 (immunity)
 --- ***** ----- 
--- ******* ---- macOS-15.5-arm64-arm-64bit 2025-06-22 19:40:47
+-- ******* ---- macOS-15.5-arm64-arm-64bit 2025-06-23 11:21:03
 - *** --- * --- 
 - ** ---------- [config]
-- ** ---------- .> app:         instagram_bot:0x1062b5e50
+- ** ---------- .> app:         instagram_bot:0x103bb5390
 - ** ---------- .> transport:   redis://localhost:6379/0
 - ** ---------- .> results:     redis://localhost:6379/0
 - *** --- * --- .> concurrency: 4 (solo)
@@ -24,56 +24,11 @@ as early as possible.
 [tasks]
   . modules.tasks.process_video
 
-[2025-06-22 19:40:47,746: INFO/MainProcess] Connected to redis://localhost:6379/0
-[2025-06-22 19:40:47,747: INFO/MainProcess] mingle: searching for neighbors
-[2025-06-22 19:40:48,754: INFO/MainProcess] mingle: all alone
-[2025-06-22 19:40:48,770: INFO/MainProcess] celery@Ruslans-MacBook-Pro.local ready.
-[2025-06-22 19:41:53,210: WARNING/MainProcess] consumer: Connection to broke[2025-06-22 19:41:53,208: WARNING/MainProcess] consumer: Connection to broker lost. Trying to re-establish the connection...
-Traceback (most recent call last):
-  File "/Users/ruslan/Projects/Instagram-Upload-BOT/.venv/lib/python3.11/site-packages/celery/worker/consumer/consumer.py", line 341, in start
-    blueprint.start(self)
-  File "/Users/ruslan/Projects/Instagram-Upload-BOT/.venv/lib/python3.11/site-packages/celery/bootsteps.py", line 116, in start
-    step.start(parent)
-  File "/Users/ruslan/Projects/Instagram-Upload-BOT/.venv/lib/python3.11/site-packages/celery/worker/consumer/consumer.py", line 772, in start
-    c.loop(*c.loop_args())
-  File "/Users/ruslan/Projects/Instagram-Upload-BOT/.venv/lib/python3.11/site-packages/celery/worker/loops.py", line 97, in asynloop
-    next(loop)
-  File "/Users/ruslan/Projects/Instagram-Upload-BOT/.venv/lib/python3.11/site-packages/kombu/asynchronous/hub.py", line 373, in create_loop
-    cb(*cbargs)
-  File "/Users/ruslan/Projects/Instagram-Upload-BOT/.venv/lib/python3.11/site-packages/kombu/transport/redis.py", line 1359, in on_readable
-    self.cycle.on_readable(fileno)
-  File "/Users/ruslan/Projects/Instagram-Upload-BOT/.venv/lib/python3.11/site-packages/kombu/transport/redis.py", line 576, in on_readable
-    chan.handlers[type]()
-  File "/Users/ruslan/Projects/Instagram-Upload-BOT/.venv/lib/python3.11/site-packages/kombu/transport/redis.py", line 974, in _brpop_read
-    dest__item = self.client.parse_response(self.client.connection,
-                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/Users/ruslan/Projects/Instagram-Upload-BOT/.venv/lib/python3.11/site-packages/redis/client.py", line 653, in parse_response
-    response = connection.read_response()
-               ^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/Users/ruslan/Projects/Instagram-Upload-BOT/.venv/lib/python3.11/site-packages/redis/connection.py", line 644, in read_response
-    response = self._parser.read_response(disable_decoding=disable_decoding)
-               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/Users/ruslan/Projects/Instagram-Upload-BOT/.venv/lib/python3.11/site-packages/redis/_parsers/resp2.py", line 15, in read_response
-    result = self._read_response(disable_decoding=disable_decoding)
-             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/Users/ruslan/Projects/Instagram-Upload-BOT/.venv/lib/python3.11/site-packages/redis/_parsers/resp2.py", line 25, in _read_response
-    raw = self._buffer.readline()
-          ^^^^^^^^^^^^^^^^^^^^^^^
-  File "/Users/ruslan/Projects/Instagram-Upload-BOT/.venv/lib/python3.11/site-packages/redis/_parsers/socket.py", line 115, in readline
-    self._read_from_socket()
-  File "/Users/ruslan/Projects/Instagram-Upload-BOT/.venv/lib/python3.11/site-packages/redis/_parsers/socket.py", line 68, in _read_from_socket
-    raise ConnectionError(SERVER_CLOSED_CONNE[2025-06-22 19:41:53,231: WARNING/MainProcess] /Users/ruslan/Projects/Instagram-Upload-BOT/.venv/lib/python3.11/site-packages/celery/worker/consumer/consumer.py:392: CPendingDeprecationWarning: 
-In Celery 5.1 we introduced an optional breaking change which
-on connection loss cancels all currently executed tasks with late acknowledgement enabled.
-These tasks cannot be acknowledged as the connection is gone, and the tasks are automatically redelivered
-back to the queue. You can enable this behavior using the worker_cancel_long_running_tasks_on_connection_loss
-setting. In Celery 5.1 it is set to False by default. The setting will be set to True by default in Celery 6.0.
+[2025-06-23 11:21:03,071: INFO/MainProcess] Connected to redis://localhost:6379/0
+[2025-06-23 11:21:03,072: INFO/MainProcess] mingle: searching for neighbors
+[2025-06-23 11:21:04,078: INFO/MainProcess] mingle: all alone
+[2025-06-23 11:21:04,095: INFO/MainProcess] celery@Ruslans-MacBook-Pro.local ready.
 
-  warnings.warn(CANCEL_TASKS_BY_DEFAULT, CPendingDeprecationWarning)
+SIGHUP not supported: Restarting with SIGHUP is unstable on this platform!
 
-[2025-06-22 19:41:53,237: ERROR/MainProcess] consumer: Cannot connect to red[2025-06-22 19:41:53,238: ERROR/MainProcess] consumer: Cannot connect to redis://localhost:6379/0: Error 61 connecting to lo[2025-06-22 19:41:55,248: ERROR/MainProcess] consumer: Cannot connect to red[2025-06-22 19:41:55,249: ERROR/MainProcess] consumer: Cannot connect to redis://localhost:6379/0: Error 61 connecting to lo
-worker: Warm shutdown (MainProcess)
-ying again in 4.00 seconds... (2/100)
-
-
-worker: Warm shutdown (MainProcess)
+SIGHUP not supported: Restarting with SIGHUP is unstable on this platform!
