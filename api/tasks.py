@@ -4,7 +4,7 @@ from datetime import datetime
 import os
 import uuid
 
-from .models import FetchRequest, UploadRequest, TaskLog
+from api.models import FetchRequest, UploadRequest, TaskLog
 from modules.database import get_database_connection
 from modules.tasks import process_video
 from modules.fetcher import fetch_videos_for_theme_from_accounts

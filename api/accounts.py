@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException
 from typing import List
-from .models import Account, AccountCreate
+from api.models import Account, AccountCreate
 from modules.database import get_database_connection
 
 router = APIRouter()

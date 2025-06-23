@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException
 from typing import List, Optional
 from datetime import datetime
-from .models import Video
+from api.models import Video
 from modules.database import get_database_connection
 
 router = APIRouter()

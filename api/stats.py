@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException
-from .models import StatsResponse
+from api.models import StatsResponse
 from modules.database import get_database_connection
 from services.task_service import TaskService
 
