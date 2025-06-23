@@ -6,3 +6,5 @@
 /.venv
 /api/__pycache__
 /frontend/node_modules
+*.db
+/logs
