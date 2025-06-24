@@ -6,7 +6,7 @@ import uuid
 
 from api.models import FetchRequest, UploadRequest, TaskLog
 from modules.database import get_database_connection
-from modules.tasks import process_video_with_progress  # Use updated original file
+from modules.tasks import process_video_with_progress
 from modules.fetcher import fetch_videos_for_theme_from_accounts
 from services.task_service import TaskService
 
@@ -81,8 +81,6 @@ async def fetch_videos(request: FetchRequest):
 async def upload_videos(request: UploadRequest):
     """Trigger video upload to Instagram with detailed progress tracking"""
     try:
-        task_id = str(uuid.uuid4())
-
         # Get account details
         with get_database_connection() as conn:
             cursor = conn.cursor()
@@ -99,18 +97,7 @@ async def upload_videos(request: UploadRequest):
         TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
         TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
-        # Log task start with detailed info
-        await TaskService.log_task(
-            task_id=task_id,
-            task_type="upload",
-            status="running",
-            account_username=request.account_username,
-            message=f"Preparing to upload {len(request.video_links)} videos to @{request.account_username}",
-            progress=0,
-            total_items=len(request.video_links)
-        )
-
-        # Start enhanced Celery task with progress tracking
+        # Start Celery task (this will handle its own logging)
         celery_task = process_video_with_progress.delay(
             account_data,
             request.video_links,
@@ -118,9 +105,10 @@ async def upload_videos(request: UploadRequest):
             TELEGRAM_CHAT_ID
         )
 
+        # Return Celery task ID as our task ID (no duplicate logging)
         return {
             "success": True,
-            "task_id": task_id,
+            "task_id": celery_task.id,  # Use Celery task ID directly
             "celery_task_id": celery_task.id,
             "message": f"Upload task started for {len(request.video_links)} videos",
             "total_videos": len(request.video_links),
@@ -197,9 +185,6 @@ async def cancel_task(task_id: str):
             status="cancelled",
             message="Task cancelled by user request"
         )
-
-        # Note: The actual Celery task will check this status and stop itself
-        # when it next calls check_if_cancelled()
 
         return {"message": f"Task {task_id} cancellation requested"}
 

@@ -29,9 +29,9 @@ class ProgressTask(Task):
         if cooldown:
             message += f" (Next in {cooldown}s)"
 
-        # Update database with progress info
+        # Update database with progress info using Celery task ID
         asyncio.run(TaskService.update_task_progress(
-            task_id=self.request.id,
+            task_id=self.request.id,  # Use Celery task ID
             progress=progress_percent,
             current_item=current_item,
             message=message,
@@ -97,18 +97,16 @@ def process_video(self, account, videos, telegram_token, chat_id):
         time.sleep(cooldown)
 
 
-# New enhanced function with detailed progress tracking and cancellation
+# Enhanced function with detailed progress tracking and cancellation
 @app.task(bind=True, base=ProgressTask, max_retries=3)
 def process_video_with_progress(self, account, videos, telegram_token, chat_id):
     """Enhanced video processing with detailed progress tracking and cancellation support"""
     username, password, theme, two_fa_key = account
-
-    # Initialize progress tracking
     total_videos = len(videos)
 
-    # Log task start with total count
+    # Initialize task logging with Celery task ID
     asyncio.run(TaskService.log_task(
-        task_id=self.request.id,
+        task_id=self.request.id,  # Use Celery task ID directly
         task_type="upload",
         status="running",
         account_username=username,
@@ -258,7 +256,7 @@ def process_video_with_progress(self, account, videos, telegram_token, chat_id):
                                             f"🛑 Upload task cancelled for @{username} during cooldown")
                             raise Ignore()
 
-                        wait_time = min(10, remaining)  # Check every 10 seconds instead of 30
+                        wait_time = min(10, remaining)
                         time.sleep(wait_time)
                         remaining -= wait_time
 
