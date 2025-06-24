@@ -15,8 +15,8 @@ from modules.database import init_database
 # Initialize FastAPI
 app = FastAPI(
     title="Instagram Bot API",
-    description="Web interface for Instagram Bot",
-    version="1.0.0"
+    description="Web interface for Instagram Bot with Proxy Support",
+    version="1.1.0"
 )
 
 # CORS for frontend
@@ -41,11 +41,27 @@ async def startup():
     init_database()
     os.makedirs("videos", exist_ok=True)
     os.makedirs("sessions", exist_ok=True)
-    print("✅ FastAPI server started")
+    print("✅ FastAPI server started with proxy support")
+    print("📡 Proxy features:")
+    print("  - Individual account proxy configuration")
+    print("  - Automatic proxy testing and health monitoring")
+    print("  - Fallback to direct connection on proxy failure")
+    print("  - Real-time proxy status tracking")
 
 @app.get("/")
 async def root():
-    return {"message": "Instagram Bot API", "status": "running"}
+    return {
+        "message": "Instagram Bot API with Proxy Support",
+        "status": "running",
+        "version": "1.1.0",
+        "features": [
+            "Account management",
+            "Video processing",
+            "Task management",
+            "Proxy support",
+            "Health monitoring"
+        ]
+    }
 
 if __name__ == "__main__":
     import uvicorn
