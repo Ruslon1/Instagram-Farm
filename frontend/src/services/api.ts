@@ -1,5 +1,5 @@
 import axios from 'axios';
-import type { Account, AccountCreate, Video, TaskLog, Stats, FetchRequest, UploadRequest, TikTokSource, TikTokSourceCreate, TaskProgress } from '../types';
+import type { Account, AccountCreate, Video, TaskLog, Stats, FetchRequest, UploadRequest, TikTokSource, TikTokSourceCreate, TaskProgress, ProxySettings, ProxyTestResult } from '../types';
 
 const api = axios.create({
   baseURL: 'http://localhost:8000/api',
@@ -15,6 +15,27 @@ export const accountsApi = {
 
   create: async (account: AccountCreate): Promise<{ message: string }> => {
     const response = await api.post('/accounts', account);
+    return response.data;
+  },
+
+  // Proxy management
+  updateProxy: async (username: string, proxySettings: ProxySettings): Promise<{ message: string }> => {
+    const response = await api.put(`/accounts/${username}/proxy`, proxySettings);
+    return response.data;
+  },
+
+  removeProxy: async (username: string): Promise<{ message: string }> => {
+    const response = await api.delete(`/accounts/${username}/proxy`);
+    return response.data;
+  },
+
+  testProxy: async (username: string): Promise<ProxyTestResult> => {
+    const response = await api.post(`/accounts/${username}/proxy/test`);
+    return response.data;
+  },
+
+  getProxy: async (username: string): Promise<any> => {
+    const response = await api.get(`/accounts/${username}/proxy`);
     return response.data;
   },
 };

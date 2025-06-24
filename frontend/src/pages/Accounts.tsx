@@ -1,12 +1,15 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, User, Calendar, TrendingUp } from 'lucide-react';
+import { Plus, User, Calendar, TrendingUp, Globe, CheckCircle, XCircle, Clock, Settings } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { accountsApi } from '../services/api';
+import ProxyModal from '../components/ProxyModal';
 import type { AccountCreate } from '../types';
 
 const Accounts = () => {
   const [showForm, setShowForm] = useState(false);
+  const [showProxyModal, setShowProxyModal] = useState(false);
+  const [selectedAccount, setSelectedAccount] = useState<string>('');
   const [formData, setFormData] = useState<AccountCreate>({
     username: '',
     password: '',
@@ -43,6 +46,11 @@ const Accounts = () => {
     createMutation.mutate(formData);
   };
 
+  const handleProxyClick = (username: string) => {
+    setSelectedAccount(username);
+    setShowProxyModal(true);
+  };
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'active':
@@ -54,6 +62,36 @@ const Accounts = () => {
       default:
         return 'bg-gray-100 text-gray-800';
     }
+  };
+
+  const getProxyStatusIcon = (account: any) => {
+    if (!account.proxy_host) {
+      return <Globe className="w-4 h-4 text-gray-300" />;
+    }
+
+    if (!account.proxy_active) {
+      return <Globe className="w-4 h-4 text-gray-400" />;
+    }
+
+    switch (account.proxy_status) {
+      case 'working':
+        return <CheckCircle className="w-4 h-4 text-green-600" />;
+      case 'failed':
+        return <XCircle className="w-4 h-4 text-red-600" />;
+      default:
+        return <Clock className="w-4 h-4 text-yellow-600" />;
+    }
+  };
+
+  const getProxyTooltip = (account: any) => {
+    if (!account.proxy_host) return 'No proxy configured';
+    if (!account.proxy_active) return 'Proxy disabled';
+
+    const status = account.proxy_status || 'unchecked';
+    const host = account.proxy_host;
+    const port = account.proxy_port;
+
+    return `${host}:${port} - ${status}`;
   };
 
   if (isLoading) {
@@ -78,7 +116,7 @@ const Accounts = () => {
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Instagram Accounts</h1>
-          <p className="text-gray-600">Manage your Instagram accounts</p>
+          <p className="text-gray-600">Manage your Instagram accounts and proxy settings</p>
         </div>
         <button
           onClick={() => setShowForm(true)}
@@ -104,10 +142,16 @@ const Accounts = () => {
                 Status
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Proxy
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Posts
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Last Login
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Actions
               </th>
             </tr>
           </thead>
@@ -138,6 +182,18 @@ const Accounts = () => {
                     {account.status}
                   </span>
                 </td>
+                <td className="px-6 py-4 whitespace-nowrap">
+                  <div className="flex items-center space-x-2">
+                    <div title={getProxyTooltip(account)}>
+                      {getProxyStatusIcon(account)}
+                    </div>
+                    {account.proxy_host && (
+                      <div className="text-xs text-gray-500">
+                        {account.proxy_host}:{account.proxy_port}
+                      </div>
+                    )}
+                  </div>
+                </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                   <div className="flex items-center">
                     <TrendingUp className="w-4 h-4 text-gray-400 mr-1" />
@@ -149,6 +205,15 @@ const Accounts = () => {
                     <Calendar className="w-4 h-4 text-gray-400 mr-1" />
                     {account.last_login ? new Date(account.last_login).toLocaleDateString() : 'Never'}
                   </div>
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                  <button
+                    onClick={() => handleProxyClick(account.username)}
+                    className="text-blue-600 hover:text-blue-800 flex items-center space-x-1"
+                  >
+                    <Settings className="w-4 h-4" />
+                    <span>Proxy</span>
+                  </button>
                 </td>
               </tr>
             ))}
@@ -227,7 +292,7 @@ const Accounts = () => {
                 </label>
                 <input
                   type="text"
-                  value={formData.two_fa_key}
+                  value={formData.two_fa_key || ''}
                   onChange={(e) => setFormData({ ...formData, two_fa_key: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500"
                   placeholder="2FA key if enabled"
@@ -254,6 +319,13 @@ const Accounts = () => {
           </div>
         </div>
       )}
+
+      {/* Proxy Modal */}
+      <ProxyModal
+        isOpen={showProxyModal}
+        onClose={() => setShowProxyModal(false)}
+        username={selectedAccount}
+      />
     </div>
   );
 };

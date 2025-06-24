@@ -4,6 +4,10 @@ export interface Account {
   status: string;
   posts_count: number;
   last_login?: string;
+  proxy_host?: string;
+  proxy_port?: number;
+  proxy_status?: string;
+  proxy_active: boolean;
 }
 
 export interface AccountCreate {
@@ -11,6 +15,22 @@ export interface AccountCreate {
   password: string;
   theme: string;
   two_fa_key?: string;
+}
+
+export interface ProxySettings {
+  proxy_type: 'HTTP' | 'SOCKS5';
+  proxy_host: string;
+  proxy_port: number;
+  proxy_username?: string;
+  proxy_password?: string;
+  proxy_active: boolean;
+}
+
+export interface ProxyTestResult {
+  success: boolean;
+  message: string;
+  response_time?: number;
+  external_ip?: string;
 }
 
 export interface Video {

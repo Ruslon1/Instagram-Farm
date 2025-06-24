@@ -35,6 +35,14 @@ class ProxyTestResult(BaseModel):
     response_time: Optional[float] = None
     external_ip: Optional[str] = None
 
+class ProxyUpdate(BaseModel):
+    proxy_type: Optional[str] = None
+    proxy_host: Optional[str] = None
+    proxy_port: Optional[int] = None
+    proxy_username: Optional[str] = None
+    proxy_password: Optional[str] = None
+    proxy_active: Optional[bool] = None
+
 # Video models
 class Video(BaseModel):
     link: str

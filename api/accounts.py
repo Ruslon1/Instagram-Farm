@@ -1,8 +1,28 @@
-from fastapi import APIRouter, HTTPException
+export
+interface
+ProxySettings
+{
+    proxy_type: 'HTTP' | 'SOCKS5';
+proxy_host: string;
+proxy_port: number;
+proxy_username?: string;
+proxy_password?: string;
+proxy_active: boolean;
+}
+
+export
+interface
+ProxyTestResult
+{
+    success: boolean;
+message: string;
+response_time?: number;
+external_ip?: string;
+}from fastapi import APIRouter, HTTPException
 from typing import List
 import requests
 import time
-from api.models import Account, AccountCreate, ProxySettings, ProxyTestResult
+from api.models import Account, AccountCreate, ProxySettings, ProxyTestResult, ProxyUpdate
 from modules.database import get_database_connection
 
 router = APIRouter()
@@ -28,13 +48,13 @@ async def get_accounts():
             cursor.execute('''
                            SELECT username,
                                   theme,
-                                  COALESCE(status, 'active') as status,
-                                  COALESCE(posts_count, 0)   as posts_count,
+                                  COALESCE(status, 'active')          as status,
+                                  COALESCE(posts_count, 0)            as posts_count,
                                   last_login,
                                   proxy_host,
                                   proxy_port,
                                   COALESCE(proxy_status, 'unchecked') as proxy_status,
-                                  COALESCE(proxy_active, 0) as proxy_active
+                                  COALESCE(proxy_active, 0)           as proxy_active
                            FROM accounts
                            WHERE COALESCE(active, 1) = 1
                            ORDER BY username
@@ -88,6 +108,63 @@ async def create_account(account: AccountCreate):
         raise HTTPException(status_code=500, detail=f"Failed to create account: {str(e)}")
 
 
+@router.patch("/{username}/proxy")
+async def update_account_proxy_partial(username: str, proxy_update: ProxyUpdate):
+    """Partially update proxy settings for account"""
+    try:
+        with get_database_connection() as conn:
+            cursor = conn.cursor()
+
+            # Check if account exists
+            cursor.execute("SELECT username FROM accounts WHERE username = ?", (username,))
+            if not cursor.fetchone():
+                raise HTTPException(status_code=404, detail="Account not found")
+
+            # Build update query dynamically
+            update_fields = []
+            params = []
+
+            if proxy_update.proxy_host is not None:
+                update_fields.append("proxy_host = ?")
+                params.append(proxy_update.proxy_host)
+
+            if proxy_update.proxy_port is not None:
+                update_fields.append("proxy_port = ?")
+                params.append(proxy_update.proxy_port)
+
+            if proxy_update.proxy_username is not None:
+                update_fields.append("proxy_username = ?")
+                params.append(proxy_update.proxy_username)
+
+            if proxy_update.proxy_password is not None:
+                update_fields.append("proxy_password = ?")
+                params.append(proxy_update.proxy_password)
+
+            if proxy_update.proxy_type is not None:
+                update_fields.append("proxy_type = ?")
+                params.append(proxy_update.proxy_type)
+
+            if proxy_update.proxy_active is not None:
+                update_fields.append("proxy_active = ?")
+                params.append(proxy_update.proxy_active)
+
+            if update_fields:
+                update_fields.append("proxy_status = 'unchecked'")
+                update_fields.append("proxy_last_check = NULL")
+
+                query = f"UPDATE accounts SET {', '.join(update_fields)} WHERE username = ?"
+                params.append(username)
+                cursor.execute(query, params)
+                conn.commit()
+
+            return {"message": f"Proxy settings updated for account {username}"}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to update proxy settings: {str(e)}")
+
+
 @router.put("/{username}/proxy")
 async def update_account_proxy(username: str, proxy_settings: ProxySettings):
     """Update proxy settings for account"""
@@ -102,25 +179,25 @@ async def update_account_proxy(username: str, proxy_settings: ProxySettings):
 
             # Update proxy settings
             cursor.execute('''
-                           UPDATE accounts 
-                           SET proxy_host = ?, 
-                               proxy_port = ?, 
-                               proxy_username = ?, 
-                               proxy_password = ?, 
-                               proxy_type = ?, 
-                               proxy_active = ?,
-                               proxy_status = 'unchecked',
+                           UPDATE accounts
+                           SET proxy_host       = ?,
+                               proxy_port       = ?,
+                               proxy_username   = ?,
+                               proxy_password   = ?,
+                               proxy_type       = ?,
+                               proxy_active     = ?,
+                               proxy_status     = 'unchecked',
                                proxy_last_check = NULL
                            WHERE username = ?
                            ''', (
-                proxy_settings.proxy_host,
-                proxy_settings.proxy_port,
-                proxy_settings.proxy_username,
-                proxy_settings.proxy_password,
-                proxy_settings.proxy_type,
-                proxy_settings.proxy_active,
-                username
-            ))
+                               proxy_settings.proxy_host,
+                               proxy_settings.proxy_port,
+                               proxy_settings.proxy_username,
+                               proxy_settings.proxy_password,
+                               proxy_settings.proxy_type,
+                               proxy_settings.proxy_active,
+                               username
+                           ))
 
             conn.commit()
 
@@ -146,14 +223,14 @@ async def remove_account_proxy(username: str):
 
             # Clear proxy settings
             cursor.execute('''
-                           UPDATE accounts 
-                           SET proxy_host = NULL, 
-                               proxy_port = NULL, 
-                               proxy_username = NULL, 
-                               proxy_password = NULL, 
-                               proxy_type = NULL, 
-                               proxy_active = 0,
-                               proxy_status = 'unchecked',
+                           UPDATE accounts
+                           SET proxy_host       = NULL,
+                               proxy_port       = NULL,
+                               proxy_username   = NULL,
+                               proxy_password   = NULL,
+                               proxy_type       = NULL,
+                               proxy_active     = 0,
+                               proxy_status     = 'unchecked',
                                proxy_last_check = NULL
                            WHERE username = ?
                            ''', (username,))
@@ -178,7 +255,7 @@ async def test_account_proxy(username: str):
             # Get proxy settings
             cursor.execute('''
                            SELECT proxy_host, proxy_port, proxy_username, proxy_password, proxy_type
-                           FROM accounts 
+                           FROM accounts
                            WHERE username = ?
                            ''', (username,))
 
@@ -194,8 +271,9 @@ async def test_account_proxy(username: str):
             # Update proxy status in database
             new_status = "working" if result.success else "failed"
             cursor.execute('''
-                           UPDATE accounts 
-                           SET proxy_status = ?, proxy_last_check = CURRENT_TIMESTAMP
+                           UPDATE accounts
+                           SET proxy_status     = ?,
+                               proxy_last_check = CURRENT_TIMESTAMP
                            WHERE username = ?
                            ''', (new_status, username))
             conn.commit()
@@ -208,7 +286,8 @@ async def test_account_proxy(username: str):
         raise HTTPException(status_code=500, detail=f"Failed to test proxy: {str(e)}")
 
 
-async def _test_proxy_connection(host: str, port: int, username: str = None, password: str = None, proxy_type: str = "HTTP") -> ProxyTestResult:
+async def _test_proxy_connection(host: str, port: int, username: str = None, password: str = None,
+                                 proxy_type: str = "HTTP") -> ProxyTestResult:
     """Test proxy connection by making request to external service"""
     try:
         # Build proxy URL
