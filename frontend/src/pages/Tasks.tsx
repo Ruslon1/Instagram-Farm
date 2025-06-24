@@ -44,8 +44,6 @@ const TaskProgressCard = ({ task }: TaskProgressCardProps) => {
       queryClient.invalidateQueries({ queryKey: ['tasks'] });
       queryClient.invalidateQueries({ queryKey: ['task-progress', task.id] });
       queryClient.invalidateQueries({ queryKey: ['stats'] });
-
-      toast.success('Task cancellation requested - it will stop at the next checkpoint');
     },
     onError: (error: any) => {
       toast.error(error.response?.data?.detail || 'Failed to cancel task');
@@ -241,10 +239,9 @@ const Tasks = () => {
 
   const uploadMutation = useMutation({
     mutationFn: tasksApi.uploadVideos,
-    onSuccess: (data) => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tasks'] });
       queryClient.invalidateQueries({ queryKey: ['stats'] });
-      toast.success(`Upload started for ${data.total_videos} videos on @${data.account}`);
       setShowUploadForm(false);
       setUploadData({ account_username: '', video_links: [] });
     },
@@ -259,9 +256,8 @@ const Tasks = () => {
       const cancelPromises = runningTasks.map(task => tasksApi.cancelTask(task.id));
       return Promise.all(cancelPromises);
     },
-    onSuccess: (results) => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tasks'] });
-      toast.success(`Cancelled ${results.length} running tasks`);
     },
     onError: (error: any) => {
       toast.error('Failed to cancel some tasks: ' + error);
@@ -286,7 +282,6 @@ const Tasks = () => {
 
   const refreshTasks = () => {
     queryClient.invalidateQueries({ queryKey: ['tasks'] });
-    toast.success('Tasks refreshed');
   };
 
   const handleCancelAll = () => {
