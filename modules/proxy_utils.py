@@ -48,6 +48,12 @@ def build_proxy_url(proxy_config: Dict[str, Any]) -> str:
     password = proxy_config.get('password')
     proxy_type = proxy_config.get('type', 'HTTP').lower()
 
+    # Normalize proxy type
+    if proxy_type in ['https']:
+        proxy_type = 'http'  # HTTPS proxies use HTTP protocol
+    elif proxy_type in ['socks', 'socks5']:
+        proxy_type = 'socks5'
+
     if username and password:
         return f"{proxy_type}://{username}:{password}@{host}:{port}"
     else:
@@ -77,7 +83,7 @@ def get_instagrapi_proxy_settings(proxy_config: Dict[str, Any]) -> Dict[str, Any
         settings['proxy_password'] = proxy_config['password']
 
     # instagrapi uses different proxy type names
-    if proxy_type == 'HTTP':
+    if proxy_type in ['HTTP', 'HTTPS']:
         settings['proxy_type'] = 'http'
     elif proxy_type == 'SOCKS5':
         settings['proxy_type'] = 'socks5'
@@ -90,23 +96,57 @@ def test_proxy_connection(proxy_config: Dict[str, Any], timeout: int = 15) -> bo
     try:
         proxy_dict = get_proxy_dict(proxy_config)
 
-        start_time = time.time()
-        response = requests.get(
-            'http://httpbin.org/ip',
-            proxies=proxy_dict,
-            timeout=timeout
-        )
-        response_time = time.time() - start_time
+        print(f"🔍 Testing proxy: {proxy_config['host']}:{proxy_config['port']}")
+        print(f"🔍 Proxy type: {proxy_config.get('type', 'HTTP')}")
+        print(f"🔍 Proxy URL: {build_proxy_url(proxy_config)}")
 
-        if response.status_code == 200:
-            print(f"Proxy test successful: {response_time:.2f}s")
-            return True
-        else:
-            print(f"Proxy test failed with status: {response.status_code}")
-            return False
+        # Try multiple test URLs
+        test_urls = [
+            'http://httpbin.org/ip',
+            'https://httpbin.org/ip',
+            'http://icanhazip.com',
+            'https://api.ipify.org?format=json'
+        ]
+
+        for test_url in test_urls:
+            try:
+                print(f"🌐 Testing with: {test_url}")
+                start_time = time.time()
+
+                response = requests.get(
+                    test_url,
+                    proxies=proxy_dict,
+                    timeout=timeout,
+                    verify=False  # Skip SSL verification for problematic proxies
+                )
+
+                response_time = time.time() - start_time
+
+                if response.status_code == 200:
+                    print(f"✅ Proxy test successful: {response_time:.2f}s")
+                    print(f"📍 Response: {response.text[:100]}")
+                    return True
+                else:
+                    print(f"❌ Status code {response.status_code} from {test_url}")
+
+            except requests.exceptions.Timeout:
+                print(f"⏰ Timeout with {test_url}")
+                continue
+            except requests.exceptions.ProxyError as e:
+                print(f"🚫 Proxy error with {test_url}: {e}")
+                continue
+            except requests.exceptions.ConnectionError as e:
+                print(f"🔌 Connection error with {test_url}: {e}")
+                continue
+            except Exception as e:
+                print(f"❓ Unexpected error with {test_url}: {e}")
+                continue
+
+        print("❌ All test URLs failed")
+        return False
 
     except Exception as e:
-        print(f"Proxy test failed: {e}")
+        print(f"❌ Proxy test failed: {e}")
         return False
 
 
@@ -125,7 +165,9 @@ def update_proxy_status(username: str, status: str, error_message: str = None):
             conn.commit()
 
             if status == 'failed' and error_message:
-                print(f"Proxy failed for {username}: {error_message}")
+                print(f"❌ Proxy failed for {username}: {error_message}")
+            elif status == 'working':
+                print(f"✅ Proxy working for {username}")
 
     except Exception as e:
         print(f"Error updating proxy status for {username}: {e}")
