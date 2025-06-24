@@ -78,40 +78,15 @@ const Dashboard = () => {
             description="Download new videos from TikTok sources"
             icon={Play}
             color="blue"
-            href="/videos?action=fetch"
+            href="/videos"
           />
           <ActionButton
             title="Upload Videos"
             description="Start uploading pending videos to Instagram"
             icon={Upload}
             color="green"
-            href="/tasks?action=upload"
+            href="/tasks"
           />
-        </div>
-      </div>
-
-      {/* System Status */}
-      <div className="bg-white rounded-lg shadow p-6">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">System Status</h2>
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <span className="text-sm text-gray-600">Backend API</span>
-            <span className="px-2 py-1 text-xs font-medium bg-green-100 text-green-800 rounded-full">
-              Online
-            </span>
-          </div>
-          <div className="flex items-center justify-between">
-            <span className="text-sm text-gray-600">Celery Worker</span>
-            <span className="px-2 py-1 text-xs font-medium bg-green-100 text-green-800 rounded-full">
-              Running
-            </span>
-          </div>
-          <div className="flex items-center justify-between">
-            <span className="text-sm text-gray-600">Redis</span>
-            <span className="px-2 py-1 text-xs font-medium bg-green-100 text-green-800 rounded-full">
-              Connected
-            </span>
-          </div>
         </div>
       </div>
     </div>

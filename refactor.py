@@ -193,40 +193,6 @@ def create_fresh_database():
         return False
 
 
-def add_sample_data():
-    """Add some sample data for testing"""
-    print("🌱 Adding sample data...")
-
-    try:
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
-
-        # Add sample TikTok sources
-        sample_sources = [
-            ("ishowspeed", "ishowdailyupdate3", True),
-            ("ishowspeed", "speedyupdates", True),
-            ("gaming", "gamingclips", True),
-            ("funny", "funnymoments", True),
-        ]
-
-        for theme, username, active in sample_sources:
-            cursor.execute('''
-                           INSERT
-                           OR IGNORE INTO tiktok_sources (theme, tiktok_username, active)
-                VALUES (?, ?, ?)
-                           ''', (theme, username, active))
-
-        conn.commit()
-        conn.close()
-
-        print("✅ Sample data added")
-        return True
-
-    except Exception as e:
-        print(f"❌ Failed to add sample data: {e}")
-        return False
-
-
 def verify_database():
     """Verify the database was created correctly"""
     print("🔍 Verifying database...")
@@ -304,10 +270,7 @@ def main():
         print("❌ Failed to create fresh database")
         return
 
-    # Step 4: Add sample data
-    add_sample_data()
-
-    # Step 5: Verify database
+    # Step 4: Verify database
     if not verify_database():
         print("❌ Database verification failed")
         return
