@@ -9,12 +9,31 @@ class Account(BaseModel):
     status: str = "active"
     posts_count: int = 0
     last_login: Optional[str] = None
+    proxy_host: Optional[str] = None
+    proxy_port: Optional[int] = None
+    proxy_status: Optional[str] = None
+    proxy_active: bool = False
 
 class AccountCreate(BaseModel):
     username: str
     password: str
     theme: str
     two_fa_key: Optional[str] = None
+
+# Proxy models
+class ProxySettings(BaseModel):
+    proxy_type: str = "HTTP"  # HTTP, SOCKS5
+    proxy_host: str
+    proxy_port: int
+    proxy_username: Optional[str] = None
+    proxy_password: Optional[str] = None
+    proxy_active: bool = True
+
+class ProxyTestResult(BaseModel):
+    success: bool
+    message: str
+    response_time: Optional[float] = None
+    external_ip: Optional[str] = None
 
 # Video models
 class Video(BaseModel):

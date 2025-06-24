@@ -1,6 +1,8 @@
 from fastapi import APIRouter, HTTPException
 from typing import List
-from api.models import Account, AccountCreate
+import requests
+import time
+from api.models import Account, AccountCreate, ProxySettings, ProxyTestResult
 from modules.database import get_database_connection
 
 router = APIRouter()
@@ -8,7 +10,7 @@ router = APIRouter()
 
 @router.get("/", response_model=List[Account])
 async def get_accounts():
-    """Get all Instagram accounts"""
+    """Get all Instagram accounts with proxy info"""
     try:
         with get_database_connection() as conn:
             cursor = conn.cursor()
@@ -28,7 +30,11 @@ async def get_accounts():
                                   theme,
                                   COALESCE(status, 'active') as status,
                                   COALESCE(posts_count, 0)   as posts_count,
-                                  last_login
+                                  last_login,
+                                  proxy_host,
+                                  proxy_port,
+                                  COALESCE(proxy_status, 'unchecked') as proxy_status,
+                                  COALESCE(proxy_active, 0) as proxy_active
                            FROM accounts
                            WHERE COALESCE(active, 1) = 1
                            ORDER BY username
@@ -41,7 +47,11 @@ async def get_accounts():
                     theme=row[1],
                     status=row[2],
                     posts_count=row[3],
-                    last_login=row[4]
+                    last_login=row[4],
+                    proxy_host=row[5],
+                    proxy_port=row[6],
+                    proxy_status=row[7],
+                    proxy_active=bool(row[8])
                 ))
 
             return accounts
@@ -76,3 +86,182 @@ async def create_account(account: AccountCreate):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to create account: {str(e)}")
+
+
+@router.put("/{username}/proxy")
+async def update_account_proxy(username: str, proxy_settings: ProxySettings):
+    """Update proxy settings for account"""
+    try:
+        with get_database_connection() as conn:
+            cursor = conn.cursor()
+
+            # Check if account exists
+            cursor.execute("SELECT username FROM accounts WHERE username = ?", (username,))
+            if not cursor.fetchone():
+                raise HTTPException(status_code=404, detail="Account not found")
+
+            # Update proxy settings
+            cursor.execute('''
+                           UPDATE accounts 
+                           SET proxy_host = ?, 
+                               proxy_port = ?, 
+                               proxy_username = ?, 
+                               proxy_password = ?, 
+                               proxy_type = ?, 
+                               proxy_active = ?,
+                               proxy_status = 'unchecked',
+                               proxy_last_check = NULL
+                           WHERE username = ?
+                           ''', (
+                proxy_settings.proxy_host,
+                proxy_settings.proxy_port,
+                proxy_settings.proxy_username,
+                proxy_settings.proxy_password,
+                proxy_settings.proxy_type,
+                proxy_settings.proxy_active,
+                username
+            ))
+
+            conn.commit()
+
+        return {"message": f"Proxy settings updated for account {username}"}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to update proxy settings: {str(e)}")
+
+
+@router.delete("/{username}/proxy")
+async def remove_account_proxy(username: str):
+    """Remove proxy settings from account"""
+    try:
+        with get_database_connection() as conn:
+            cursor = conn.cursor()
+
+            # Check if account exists
+            cursor.execute("SELECT username FROM accounts WHERE username = ?", (username,))
+            if not cursor.fetchone():
+                raise HTTPException(status_code=404, detail="Account not found")
+
+            # Clear proxy settings
+            cursor.execute('''
+                           UPDATE accounts 
+                           SET proxy_host = NULL, 
+                               proxy_port = NULL, 
+                               proxy_username = NULL, 
+                               proxy_password = NULL, 
+                               proxy_type = NULL, 
+                               proxy_active = 0,
+                               proxy_status = 'unchecked',
+                               proxy_last_check = NULL
+                           WHERE username = ?
+                           ''', (username,))
+
+            conn.commit()
+
+        return {"message": f"Proxy settings removed from account {username}"}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to remove proxy settings: {str(e)}")
+
+
+@router.post("/{username}/proxy/test", response_model=ProxyTestResult)
+async def test_account_proxy(username: str):
+    """Test proxy settings for account"""
+    try:
+        with get_database_connection() as conn:
+            cursor = conn.cursor()
+
+            # Get proxy settings
+            cursor.execute('''
+                           SELECT proxy_host, proxy_port, proxy_username, proxy_password, proxy_type
+                           FROM accounts 
+                           WHERE username = ?
+                           ''', (username,))
+
+            proxy_data = cursor.fetchone()
+            if not proxy_data or not proxy_data[0]:
+                raise HTTPException(status_code=400, detail="No proxy configured for this account")
+
+            proxy_host, proxy_port, proxy_username, proxy_password, proxy_type = proxy_data
+
+            # Test proxy connection
+            result = await _test_proxy_connection(proxy_host, proxy_port, proxy_username, proxy_password, proxy_type)
+
+            # Update proxy status in database
+            new_status = "working" if result.success else "failed"
+            cursor.execute('''
+                           UPDATE accounts 
+                           SET proxy_status = ?, proxy_last_check = CURRENT_TIMESTAMP
+                           WHERE username = ?
+                           ''', (new_status, username))
+            conn.commit()
+
+            return result
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to test proxy: {str(e)}")
+
+
+async def _test_proxy_connection(host: str, port: int, username: str = None, password: str = None, proxy_type: str = "HTTP") -> ProxyTestResult:
+    """Test proxy connection by making request to external service"""
+    try:
+        # Build proxy URL
+        if username and password:
+            proxy_url = f"{proxy_type.lower()}://{username}:{password}@{host}:{port}"
+        else:
+            proxy_url = f"{proxy_type.lower()}://{host}:{port}"
+
+        proxies = {
+            'http': proxy_url,
+            'https': proxy_url
+        }
+
+        # Test connection with timeout
+        start_time = time.time()
+        response = requests.get(
+            'http://httpbin.org/ip',
+            proxies=proxies,
+            timeout=15
+        )
+        response_time = time.time() - start_time
+
+        if response.status_code == 200:
+            ip_data = response.json()
+            return ProxyTestResult(
+                success=True,
+                message="Proxy is working correctly",
+                response_time=round(response_time, 2),
+                external_ip=ip_data.get('origin', 'Unknown')
+            )
+        else:
+            return ProxyTestResult(
+                success=False,
+                message=f"Proxy returned status code: {response.status_code}"
+            )
+
+    except requests.exceptions.Timeout:
+        return ProxyTestResult(
+            success=False,
+            message="Proxy connection timeout (15s)"
+        )
+    except requests.exceptions.ProxyError:
+        return ProxyTestResult(
+            success=False,
+            message="Proxy connection failed - check host/port/credentials"
+        )
+    except requests.exceptions.ConnectionError:
+        return ProxyTestResult(
+            success=False,
+            message="Cannot connect to proxy server"
+        )
+    except Exception as e:
+        return ProxyTestResult(
+            success=False,
+            message=f"Proxy test failed: {str(e)}"
+        )
