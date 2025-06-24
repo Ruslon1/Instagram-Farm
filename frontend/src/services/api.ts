@@ -50,6 +50,37 @@ export const videosApi = {
     const response = await api.get(`/videos?${params}`);
     return response.data;
   },
+
+  delete: async (videoLink: string): Promise<{ message: string }> => {
+    const response = await api.delete(`/videos/${encodeURIComponent(videoLink)}`);
+    return response.data;
+  },
+
+  bulkDelete: async (videoLinks: string[]): Promise<any> => {
+    const response = await api.post('/videos/bulk-delete', videoLinks);
+    return response.data;
+  },
+
+  deleteByTheme: async (theme: string, status?: string): Promise<any> => {
+    const params = status ? `?status=${status}` : '';
+    const response = await api.delete(`/videos/by-theme/${theme}${params}`);
+    return response.data;
+  },
+
+  deleteByStatus: async (status: string): Promise<any> => {
+    const response = await api.delete(`/videos/by-status/${status}`);
+    return response.data;
+  },
+
+  updateStatus: async (videoLink: string, newStatus: string): Promise<any> => {
+    const response = await api.patch(`/videos/${encodeURIComponent(videoLink)}/status?new_status=${newStatus}`);
+    return response.data;
+  },
+
+  getStats: async (): Promise<any> => {
+    const response = await api.get('/videos/stats');
+    return response.data;
+  },
 };
 
 // TikTok Sources API
@@ -125,6 +156,49 @@ export const tasksApi = {
 export const statsApi = {
   get: async (): Promise<Stats> => {
     const response = await api.get('/stats');
+    return response.data;
+  },
+};
+
+// Proxy monitoring API
+export const proxyApi = {
+  getMetrics: async (): Promise<any> => {
+    const response = await api.get('/proxy/metrics');
+    return response.data;
+  },
+
+  getUptimeStats: async (): Promise<any> => {
+    const response = await api.get('/proxy/uptime');
+    return response.data;
+  },
+
+  getPerformanceTrends: async (days: number): Promise<any> => {
+    const response = await api.get(`/proxy/performance-trends?days=${days}`);
+    return response.data;
+  },
+
+  getAccountsStatus: async (): Promise<any> => {
+    const response = await api.get('/proxy/accounts-status');
+    return response.data;
+  },
+
+  runManualCheck: async (): Promise<any> => {
+    const response = await api.post('/proxy/manual-check');
+    return response.data;
+  },
+
+  startScheduler: async (): Promise<any> => {
+    const response = await api.post('/proxy/scheduler/start');
+    return response.data;
+  },
+
+  stopScheduler: async (): Promise<any> => {
+    const response = await api.post('/proxy/scheduler/stop');
+    return response.data;
+  },
+
+  getSchedulerStatus: async (): Promise<any> => {
+    const response = await api.get('/proxy/scheduler/status');
     return response.data;
   },
 };
