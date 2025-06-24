@@ -19,7 +19,7 @@ const Tasks = () => {
   const { data: tasks, isLoading: tasksLoading } = useQuery({
     queryKey: ['tasks', statusFilter],
     queryFn: () => tasksApi.getAll(statusFilter || undefined),
-    refetchInterval: 5000, // Refresh every 5 seconds for live updates
+    refetchInterval: 5000,
   });
 
   const { data: accounts } = useQuery({
@@ -39,13 +39,13 @@ const Tasks = () => {
       queryClient.invalidateQueries({ queryKey: ['stats'] });
       toast.success(`Upload started for ${data.total_videos} videos on @${data.account}`);
       setShowUploadForm(false);
+      setUploadData({ account_username: '', video_links: [] });
     },
     onError: (error: any) => {
       toast.error(error.response?.data?.detail || 'Failed to start upload');
     },
   });
 
-  // Mass cancel all running tasks
   const cancelAllMutation = useMutation({
     mutationFn: async () => {
       const runningTasks = tasks?.filter(task => task.status === 'running') || [];
@@ -94,14 +94,13 @@ const Tasks = () => {
     }
   };
 
-  // Get pending videos for selected account
+  // Get pending videos for selected account theme
   const selectedAccount = accounts?.find(acc => acc.username === uploadData.account_username);
   const pendingVideos = videos?.filter(video =>
     video.status === 'pending' &&
     (!selectedAccount || video.theme === selectedAccount.theme)
   ) || [];
 
-  // Group tasks by status
   const runningTasks = tasks?.filter(task => task.status === 'running') || [];
   const completedTasks = tasks?.filter(task => ['success', 'failed', 'cancelled'].includes(task.status)) || [];
 
@@ -227,7 +226,7 @@ const Tasks = () => {
             <form onSubmit={handleUploadSubmit} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Account *
+                  Instagram Account *
                 </label>
                 <select
                   value={uploadData.account_username}
@@ -235,16 +234,16 @@ const Tasks = () => {
                     setUploadData({
                       ...uploadData,
                       account_username: e.target.value,
-                      video_links: [] // Reset video selection when account changes
+                      video_links: []
                     });
                   }}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
                   required
                 >
-                  <option value="">Select account...</option>
+                  <option value="">Select Instagram account...</option>
                   {accounts?.filter(acc => acc.status === 'active').map(account => (
                     <option key={account.username} value={account.username}>
-                      @{account.username} ({account.theme})
+                      @{account.username} ({account.theme} theme)
                     </option>
                   ))}
                 </select>
@@ -255,10 +254,10 @@ const Tasks = () => {
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Videos to Upload *
                   </label>
-                  <div className="max-h-60 overflow-y-auto border border-gray-300 rounded-md">
-                    {pendingVideos.length > 0 ? (
-                      pendingVideos.map((video, index) => (
-                        <label key={index} className="flex items-center p-3 hover:bg-gray-50 border-b border-gray-100 last:border-b-0">
+                  {pendingVideos.length > 0 ? (
+                    <div className="max-h-60 overflow-y-auto border border-gray-300 rounded-md">
+                      {pendingVideos.map((video, index) => (
+                        <label key={`${video.link}-${index}`} className="flex items-center p-3 hover:bg-gray-50 border-b border-gray-100 last:border-b-0">
                           <input
                             type="checkbox"
                             checked={uploadData.video_links.includes(video.link)}
@@ -279,22 +278,38 @@ const Tasks = () => {
                           />
                           <div className="flex-1">
                             <p className="text-sm text-gray-900">TikTok Video #{index + 1}</p>
-                            <p className="text-xs text-gray-500">{video.theme}</p>
+                            <p className="text-xs text-gray-500 truncate" title={video.link}>
+                              {video.link.length > 50 ? `${video.link.substring(0, 50)}...` : video.link}
+                            </p>
+                            <div className="flex items-center space-x-2 mt-1">
+                              <span className="px-2 py-1 text-xs bg-purple-100 text-purple-800 rounded-full">
+                                {video.theme}
+                              </span>
+                              <span className="px-2 py-1 text-xs bg-yellow-100 text-yellow-800 rounded-full">
+                                {video.status}
+                              </span>
+                            </div>
                           </div>
                         </label>
-                      ))
-                    ) : (
-                      <div className="p-4 text-center text-gray-500">
-                        <p>No pending videos available for this account's theme</p>
-                        {selectedAccount && (
-                          <p className="text-xs mt-1">Theme: {selectedAccount.theme}</p>
-                        )}
-                      </div>
-                    )}
-                  </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="p-4 text-center text-gray-500 border border-gray-300 rounded-md">
+                      <p>No pending videos available</p>
+                      {selectedAccount && (
+                        <p className="text-xs mt-1">
+                          Account theme: {selectedAccount.theme}
+                        </p>
+                      )}
+                      <p className="text-xs mt-1">
+                        Go to Videos page to fetch new content
+                      </p>
+                    </div>
+                  )}
+
                   {pendingVideos.length > 0 && (
                     <div className="mt-2 flex justify-between text-xs text-gray-500">
-                      <span>{uploadData.video_links.length} selected</span>
+                      <span>{uploadData.video_links.length} of {pendingVideos.length} selected</span>
                       <button
                         type="button"
                         onClick={() => {
@@ -307,7 +322,7 @@ const Tasks = () => {
                             });
                           }
                         }}
-                        className="text-green-600 hover:text-green-800"
+                        className="text-green-600 hover:text-green-800 underline"
                       >
                         {uploadData.video_links.length === pendingVideos.length ? 'Deselect All' : 'Select All'}
                       </button>
@@ -316,17 +331,27 @@ const Tasks = () => {
                 </div>
               )}
 
-              <div className="bg-blue-50 p-3 rounded-md">
-                <p className="text-sm text-blue-800">
-                  <strong>Note:</strong> Videos will be uploaded with random cooldowns (5-25 minutes) between uploads for safety.
-                  You can monitor the progress in real-time and cancel at any time.
-                </p>
-              </div>
+              {uploadData.video_links.length > 0 && (
+                <div className="bg-blue-50 p-3 rounded-md">
+                  <p className="text-sm text-blue-800">
+                    <strong>📋 Upload Process:</strong>
+                  </p>
+                  <ul className="text-xs text-blue-700 mt-1 space-y-1">
+                    <li>• Videos will be downloaded and uploaded one by one</li>
+                    <li>• Random cooldowns (5-25 minutes) between uploads for safety</li>
+                    <li>• You can monitor progress and cancel at any time</li>
+                    <li>• Notifications will be sent to Telegram</li>
+                  </ul>
+                </div>
+              )}
 
               <div className="flex justify-end space-x-3 pt-4">
                 <button
                   type="button"
-                  onClick={() => setShowUploadForm(false)}
+                  onClick={() => {
+                    setShowUploadForm(false);
+                    setUploadData({ account_username: '', video_links: [] });
+                  }}
                   className="px-4 py-2 text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200"
                 >
                   Cancel
@@ -334,9 +359,19 @@ const Tasks = () => {
                 <button
                   type="submit"
                   disabled={uploadMutation.isPending || uploadData.video_links.length === 0}
-                  className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50"
+                  className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50 flex items-center"
                 >
-                  {uploadMutation.isPending ? 'Starting...' : `Upload ${uploadData.video_links.length} Videos`}
+                  {uploadMutation.isPending ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                      Starting...
+                    </>
+                  ) : (
+                    <>
+                      <Upload className="w-4 h-4 mr-2" />
+                      Upload {uploadData.video_links.length} Videos
+                    </>
+                  )}
                 </button>
               </div>
             </form>
