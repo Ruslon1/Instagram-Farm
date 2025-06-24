@@ -21,11 +21,17 @@ class ProgressTask(Task):
     def __init__(self):
         self.should_stop = False
 
-    def update_progress(self, current: int, total: int, current_item: str, cooldown: int = None):
+    def update_progress(self, current_video: int, total_videos: int, current_item: str, step_progress: int = 0,
+                        cooldown: int = None):
         """Update task progress with detailed info"""
-        progress_percent = int((current / total) * 100) if total > 0 else 0
+        # Calculate progress based on video completion + current step
+        # Each video has multiple steps: check(10%) -> download(40%) -> upload(40%) -> cooldown(10%)
+        base_progress = ((current_video - 1) / total_videos) * 100 if total_videos > 0 else 0
+        step_contribution = (step_progress / total_videos) if total_videos > 0 else 0
+        progress_percent = int(base_progress + step_contribution)
+        progress_percent = min(progress_percent, 100)  # Cap at 100%
 
-        message = f"Processing {current}/{total}: {current_item}"
+        message = f"Processing {current_video}/{total_videos}: {current_item}"
         if cooldown:
             message += f" (Next in {cooldown}s)"
 
@@ -137,17 +143,13 @@ def process_video_with_progress(self, account, videos, telegram_token, chat_id):
         current_video_name = f"Video {i}"
 
         try:
-            # Update progress - starting this video
-            self.update_progress(i, total_videos, f"Checking if {current_video_name} was already posted")
+            # Update progress - starting this video (5% per video)
+            self.update_progress(i, total_videos, f"Checking if {current_video_name} was already posted", 5)
 
             # Check if already published
             if is_video_published(username, video):
-                asyncio.run(TaskService.update_task_progress(
-                    task_id=self.request.id,
-                    progress=int((i / total_videos) * 100),
-                    current_item=f"{current_video_name} - Already posted, skipping",
-                    message=f"Skipped {current_video_name} (already posted)"
-                ))
+                # Complete this video's progress
+                self.update_progress(i, total_videos, f"{current_video_name} - Already posted, skipping", 100)
                 continue
 
             # Check for cancellation before download
@@ -156,23 +158,18 @@ def process_video_with_progress(self, account, videos, telegram_token, chat_id):
                                 f"🛑 Upload task cancelled for @{username} during {current_video_name}")
                 raise Ignore()
 
-            # Update progress - getting download link
-            self.update_progress(i, total_videos, f"Getting download link for {current_video_name}")
+            # Update progress - getting download link (15% per video)
+            self.update_progress(i, total_videos, f"Getting download link for {current_video_name}", 15)
 
             download_url = get_download_link(video)
             if not download_url:
                 failed_count += 1
-                asyncio.run(TaskService.update_task_progress(
-                    task_id=self.request.id,
-                    progress=int((i / total_videos) * 100),
-                    current_item=f"{current_video_name} - Failed to get download link",
-                    message=f"Failed to get download link for {current_video_name}"
-                ))
+                self.update_progress(i, total_videos, f"{current_video_name} - Failed to get download link", 100)
                 telegram_notify(telegram_token, chat_id, f"❌ Failed to get download link: {video}")
                 continue
 
-            # Update progress - downloading video
-            self.update_progress(i, total_videos, f"Downloading {current_video_name}")
+            # Update progress - downloading video (40% per video)
+            self.update_progress(i, total_videos, f"Downloading {current_video_name}", 40)
 
             unique_hash = hashlib.md5(f"{username}_{video}".encode()).hexdigest()
             output_path = f"./videos/{unique_hash}.mp4"
@@ -180,12 +177,7 @@ def process_video_with_progress(self, account, videos, telegram_token, chat_id):
 
             if not success:
                 failed_count += 1
-                asyncio.run(TaskService.update_task_progress(
-                    task_id=self.request.id,
-                    progress=int((i / total_videos) * 100),
-                    current_item=f"{current_video_name} - Download failed",
-                    message=f"Failed to download {current_video_name}"
-                ))
+                self.update_progress(i, total_videos, f"{current_video_name} - Download failed", 100)
                 telegram_notify(telegram_token, chat_id, f"❌ Failed to download: {video}")
                 continue
 
@@ -200,8 +192,8 @@ def process_video_with_progress(self, account, videos, telegram_token, chat_id):
                                 f"🛑 Upload task cancelled for @{username} before uploading {current_video_name}")
                 raise Ignore()
 
-            # Update progress - uploading to Instagram
-            self.update_progress(i, total_videos, f"Uploading {current_video_name} to Instagram")
+            # Update progress - uploading to Instagram (70% per video)
+            self.update_progress(i, total_videos, f"Uploading {current_video_name} to Instagram", 70)
 
             caption = random.choice(
                 captions) + "\n#vlogging#beach#layingdown#whereatcomefrom#green#sand#red#ishowspeed#red#sunny#gettingtothebag#55154#subscribers#daily#wegotthis#sofunny"
@@ -215,19 +207,17 @@ def process_video_with_progress(self, account, videos, telegram_token, chat_id):
                 # Calculate cooldown for next video
                 cooldown = random.randint(300, 1500) if i < total_videos else 0
 
-                # Update progress - upload successful, waiting cooldown
+                # Update progress - upload successful (90% per video)
                 if cooldown > 0:
                     self.update_progress(
                         i, total_videos,
                         f"{current_video_name} uploaded successfully - Waiting {cooldown}s cooldown",
-                        cooldown
+                        90, cooldown
                     )
                 else:
-                    self.update_progress(
-                        i, total_videos,
-                        f"{current_video_name} uploaded successfully - All done!",
-                        0
-                    )
+                    # Final video completed (100%)
+                    self.update_progress(i, total_videos, f"{current_video_name} uploaded successfully - All done!",
+                                         100)
 
                 # Record publication
                 record_publication(username, video)
@@ -264,17 +254,17 @@ def process_video_with_progress(self, account, videos, telegram_token, chat_id):
                             self.update_progress(
                                 i, total_videos,
                                 f"{current_video_name} uploaded - Cooldown remaining: {remaining}s",
-                                remaining
+                                90, remaining
                             )
+
+                    # Cooldown completed (100% for this video)
+                    if i < total_videos:
+                        self.update_progress(i, total_videos, f"{current_video_name} completed - Moving to next video",
+                                             100)
 
             else:
                 failed_count += 1
-                asyncio.run(TaskService.update_task_progress(
-                    task_id=self.request.id,
-                    progress=int((i / total_videos) * 100),
-                    current_item=f"{current_video_name} - Upload failed",
-                    message=f"Failed to upload {current_video_name}"
-                ))
+                self.update_progress(i, total_videos, f"{current_video_name} - Upload failed", 100)
                 telegram_notify(telegram_token, chat_id, f"❌ Failed to upload {current_video_name} to @{username}")
 
                 # Clean up failed video file
@@ -290,13 +280,7 @@ def process_video_with_progress(self, account, videos, telegram_token, chat_id):
             failed_count += 1
             error_msg = f"Error processing {current_video_name}: {str(e)}"
 
-            asyncio.run(TaskService.update_task_progress(
-                task_id=self.request.id,
-                progress=int((i / total_videos) * 100),
-                current_item=f"{current_video_name} - Error occurred",
-                message=error_msg
-            ))
-
+            self.update_progress(i, total_videos, f"{current_video_name} - Error occurred", 100)
             telegram_notify(telegram_token, chat_id, f"❌ {error_msg}")
             continue
 
