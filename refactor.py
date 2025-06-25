@@ -1,191 +1,86 @@
 #!/usr/bin/env python3
 """
-Script to recreate Instagram Bot database from scratch
+Quick PostgreSQL setup script for Instagram Bot
 """
 
-import sqlite3
 import os
-import shutil
-from datetime import datetime
-from pathlib import Path
-
-DB_PATH = "instagram_bot.db"
-BACKUP_DIR = "database_backups"
+import sys
+from urllib.parse import urlparse
 
 
-def backup_existing_database():
-    """Create backup of existing database"""
-    if not os.path.exists(DB_PATH):
-        print("ℹ️ No existing database to backup")
-        return None
-
-    # Create backup directory
-    Path(BACKUP_DIR).mkdir(exist_ok=True)
-
-    # Create backup filename with timestamp
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    backup_path = f"{BACKUP_DIR}/instagram_bot_backup_{timestamp}.db"
-
+def check_postgresql_connection():
+    """Check if we can connect to PostgreSQL."""
     try:
-        shutil.copy2(DB_PATH, backup_path)
-        print(f"✅ Database backed up to: {backup_path}")
-        return backup_path
+        import psycopg2
+        from config.settings import settings
+
+        url = urlparse(settings.database_url)
+
+        print(f"🔗 Connecting to PostgreSQL: {url.hostname}:{url.port or 5432}/{url.path[1:]}")
+
+        conn = psycopg2.connect(
+            host=url.hostname,
+            port=url.port or 5432,
+            user=url.username,
+            password=url.password,
+            database=url.path[1:]
+        )
+
+        cursor = conn.cursor()
+        cursor.execute("SELECT version()")
+        version = cursor.fetchone()[0]
+
+        print(f"✅ PostgreSQL connection successful!")
+        print(f"📋 Version: {version}")
+
+        conn.close()
+        return True
+
+    except ImportError:
+        print("❌ psycopg2 not installed. Run: pip install psycopg2-binary")
+        return False
     except Exception as e:
-        print(f"❌ Failed to backup database: {e}")
-        return None
+        print(f"❌ PostgreSQL connection failed: {e}")
+        print("\n💡 Make sure:")
+        print("1. PostgreSQL is running")
+        print("2. Database exists")
+        print("3. User has permissions")
+        print("4. DATABASE_URL in .env is correct")
+        return False
 
 
-def remove_old_database():
-    """Remove old database file"""
-    if os.path.exists(DB_PATH):
-        try:
-            os.remove(DB_PATH)
-            print(f"🗑️ Removed old database: {DB_PATH}")
-        except Exception as e:
-            print(f"❌ Failed to remove old database: {e}")
-            return False
-    return True
-
-
-def create_fresh_database():
-    """Create a fresh database with all tables"""
-    print("🔨 Creating fresh database...")
-
+def create_database_if_not_exists():
+    """Create database if it doesn't exist."""
     try:
-        conn = sqlite3.connect(DB_PATH)
+        import psycopg2
+        from config.settings import settings
+
+        url = urlparse(settings.database_url)
+        db_name = url.path[1:]
+
+        # Connect to postgres database to create our database
+        conn = psycopg2.connect(
+            host=url.hostname,
+            port=url.port or 5432,
+            user=url.username,
+            password=url.password,
+            database='postgres'  # Connect to default database
+        )
+        conn.autocommit = True
         cursor = conn.cursor()
 
-        # Create accounts table
-        print("📋 Creating accounts table...")
-        cursor.execute('''
-                       CREATE TABLE accounts
-                       (
-                           username         TEXT PRIMARY KEY,
-                           password         TEXT NOT NULL,
-                           theme            TEXT NOT NULL,
-                           "2FAKey"         TEXT,
-                           status           TEXT    DEFAULT 'active',
-                           active           BOOLEAN DEFAULT TRUE,
-                           last_login       TIMESTAMP,
-                           posts_count      INTEGER DEFAULT 0,
-                           proxy_host       TEXT,
-                           proxy_port       INTEGER,
-                           proxy_username   TEXT,
-                           proxy_password   TEXT,
-                           proxy_type       TEXT    DEFAULT 'HTTP',
-                           proxy_active     BOOLEAN DEFAULT FALSE,
-                           proxy_last_check TIMESTAMP,
-                           proxy_status     TEXT    DEFAULT 'unchecked'
-                       )
-                       ''')
+        # Check if database exists
+        cursor.execute("SELECT 1 FROM pg_database WHERE datname = %s", (db_name,))
+        exists = cursor.fetchone()
 
-        # Create videos table
-        print("📹 Creating videos table...")
-        cursor.execute('''
-                       CREATE TABLE videos
-                       (
-                           link       TEXT NOT NULL,
-                           theme      TEXT NOT NULL,
-                           status     TEXT      DEFAULT 'pending',
-                           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                           PRIMARY KEY (link, theme)
-                       )
-                       ''')
+        if not exists:
+            print(f"🗄️ Creating database: {db_name}")
+            cursor.execute(f'CREATE DATABASE "{db_name}"')
+            print(f"✅ Database {db_name} created successfully!")
+        else:
+            print(f"✅ Database {db_name} already exists")
 
-        # Create publication history table
-        print("📝 Creating publication history table...")
-        cursor.execute('''
-                       CREATE TABLE publicationhistory
-                       (
-                           account_username TEXT NOT NULL,
-                           video_link       TEXT NOT NULL,
-                           created_at       DATETIME DEFAULT CURRENT_TIMESTAMP,
-                           PRIMARY KEY (account_username, video_link)
-                       )
-                       ''')
-
-        # Create TikTok sources table
-        print("🎯 Creating tiktok_sources table...")
-        cursor.execute('''
-                       CREATE TABLE tiktok_sources
-                       (
-                           id              INTEGER PRIMARY KEY AUTOINCREMENT,
-                           theme           TEXT NOT NULL,
-                           tiktok_username TEXT NOT NULL,
-                           active          BOOLEAN   DEFAULT TRUE,
-                           last_fetch      TIMESTAMP,
-                           videos_count    INTEGER   DEFAULT 0,
-                           created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                           UNIQUE (theme, tiktok_username)
-                       )
-                       ''')
-
-        # Create task logs table
-        print("📊 Creating task_logs table...")
-        cursor.execute('''
-                       CREATE TABLE task_logs
-                       (
-                           id               TEXT PRIMARY KEY,
-                           task_type        TEXT NOT NULL,
-                           status           TEXT NOT NULL,
-                           account_username TEXT,
-                           message          TEXT,
-                           progress         INTEGER   DEFAULT 0,
-                           total_items      INTEGER   DEFAULT 0,
-                           current_item     TEXT,
-                           next_action_at   TIMESTAMP,
-                           cooldown_seconds INTEGER,
-                           created_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                       )
-                       ''')
-
-        # Create proxy health logs table
-        print("🏥 Creating proxy_health_logs table...")
-        cursor.execute('''
-                       CREATE TABLE proxy_health_logs
-                       (
-                           id              INTEGER PRIMARY KEY AUTOINCREMENT,
-                           check_time      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                           total_proxies   INTEGER,
-                           working_proxies INTEGER,
-                           failed_proxies  INTEGER,
-                           results         TEXT
-                       )
-                       ''')
-
-        # Create indexes
-        print("🔍 Creating indexes...")
-
-        # Videos indexes
-        cursor.execute('CREATE INDEX IF NOT EXISTS idx_videos_theme ON videos(theme)')
-        cursor.execute('CREATE INDEX IF NOT EXISTS idx_videos_status ON videos(status)')
-        cursor.execute('CREATE INDEX IF NOT EXISTS idx_videos_created_at ON videos(created_at)')
-
-        # Publication history indexes
-        cursor.execute('CREATE INDEX IF NOT EXISTS idx_publications_username ON publicationhistory(account_username)')
-        cursor.execute('CREATE INDEX IF NOT EXISTS idx_publications_created_at ON publicationhistory(created_at)')
-
-        # TikTok sources indexes
-        cursor.execute('CREATE INDEX IF NOT EXISTS idx_tiktok_sources_theme ON tiktok_sources(theme)')
-        cursor.execute('CREATE INDEX IF NOT EXISTS idx_tiktok_sources_active ON tiktok_sources(active)')
-
-        # Task logs indexes
-        cursor.execute('CREATE INDEX IF NOT EXISTS idx_task_logs_status ON task_logs(status)')
-        cursor.execute('CREATE INDEX IF NOT EXISTS idx_task_logs_created_at ON task_logs(created_at)')
-
-        # Accounts proxy indexes
-        cursor.execute('CREATE INDEX IF NOT EXISTS idx_accounts_proxy_active ON accounts(proxy_active)')
-
-        # Commit all changes
-        conn.commit()
         conn.close()
-
-        print("✅ Fresh database created successfully!")
-
-        # Set proper permissions
-        os.chmod(DB_PATH, 0o666)
-        print("✅ Database permissions set")
-
         return True
 
     except Exception as e:
@@ -193,99 +88,76 @@ def create_fresh_database():
         return False
 
 
-def verify_database():
-    """Verify the database was created correctly"""
-    print("🔍 Verifying database...")
-
+def initialize_tables():
+    """Initialize database tables."""
     try:
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
+        from modules.database import init_database
 
-        # Get all tables
-        cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
-        tables = [row[0] for row in cursor.fetchall()]
-
-        expected_tables = [
-            'accounts',
-            'videos',
-            'publicationhistory',
-            'tiktok_sources',
-            'task_logs',
-            'proxy_health_logs'
-        ]
-
-        print(f"📋 Found tables: {tables}")
-
-        # Check all expected tables exist
-        for table in expected_tables:
-            if table in tables:
-                cursor.execute(f"SELECT COUNT(*) FROM {table}")
-                count = cursor.fetchone()[0]
-                print(f"  ✅ {table}: {count} rows")
-            else:
-                print(f"  ❌ {table}: MISSING")
-                return False
-
-        # Test database integrity
-        cursor.execute("PRAGMA integrity_check")
-        integrity = cursor.fetchone()[0]
-
-        if integrity == "ok":
-            print("✅ Database integrity check passed")
-        else:
-            print(f"❌ Database integrity issues: {integrity}")
-            return False
-
-        conn.close()
+        print("🔨 Initializing database tables...")
+        init_database()
+        print("✅ Database tables initialized successfully!")
         return True
 
     except Exception as e:
-        print(f"❌ Database verification failed: {e}")
+        print(f"❌ Failed to initialize tables: {e}")
         return False
 
 
 def main():
-    """Main function to recreate database"""
-    print("🔄 Instagram Bot Database Recreation Tool")
+    """Main setup function."""
+    print("🚀 Instagram Bot PostgreSQL Setup")
     print("=" * 50)
 
-    # Ask for confirmation
-    response = input("⚠️  This will DELETE your current database. Continue? (yes/no): ")
-    if response.lower() not in ['yes', 'y']:
-        print("❌ Operation cancelled")
-        return
+    # Check if .env exists
+    if not os.path.exists('.env'):
+        print("❌ .env file not found!")
+        print("📋 Please create .env file with DATABASE_URL")
+        print("📝 Example: DATABASE_URL=postgresql://user:pass@localhost:5432/instagram_bot")
+        return False
 
-    print("\n🚀 Starting database recreation...")
+    # Load settings
+    try:
+        from config.settings import settings
 
-    # Step 1: Backup existing database
-    backup_path = backup_existing_database()
+        if not settings.database_url.startswith('postgresql'):
+            print("⚠️  DATABASE_URL is not PostgreSQL")
+            print(f"📋 Current: {settings.database_url}")
+            print("📝 Expected: postgresql://user:pass@host:port/database")
 
-    # Step 2: Remove old database
-    if not remove_old_database():
-        print("❌ Failed to remove old database")
-        return
+            # Allow SQLite for development
+            if settings.database_url.startswith('sqlite'):
+                print("🔄 SQLite detected - using existing database module")
+                return True
+            else:
+                return False
 
-    # Step 3: Create fresh database
-    if not create_fresh_database():
-        print("❌ Failed to create fresh database")
-        return
+    except Exception as e:
+        print(f"❌ Failed to load settings: {e}")
+        return False
 
-    # Step 4: Verify database
-    if not verify_database():
-        print("❌ Database verification failed")
-        return
+    # Step 1: Check connection
+    print("\n📡 Step 1: Checking PostgreSQL connection...")
+    if not check_postgresql_connection():
+        # Try to create database
+        print("\n🔨 Step 2: Attempting to create database...")
+        if not create_database_if_not_exists():
+            return False
 
-    print("\n🎉 Database recreation completed successfully!")
-    print(f"📂 Database location: {os.path.abspath(DB_PATH)}")
-    if backup_path:
-        print(f"💾 Backup saved to: {os.path.abspath(backup_path)}")
+        # Try connection again
+        if not check_postgresql_connection():
+            return False
 
-    print("\n📋 Next steps:")
-    print("1. Add your Instagram accounts via the web interface")
-    print("2. Add TikTok sources for your themes")
-    print("3. Start fetching and uploading videos")
-    print("\n🚀 Run: python3 main.py")
+    # Step 2: Initialize tables
+    print("\n🏗️ Step 3: Initializing database tables...")
+    if not initialize_tables():
+        return False
+
+    print("\n🎉 PostgreSQL setup completed successfully!")
+    print("🚀 You can now run: python main.py")
+
+    return True
 
 
 if __name__ == "__main__":
-    main()
+    success = main()
+    sys.exit(0 if success else 1)

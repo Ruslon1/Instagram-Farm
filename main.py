@@ -198,6 +198,7 @@ async def startup():
 
     try:
         # Initialize database
+        from modules.database import init_database
         init_database()
         logger.info("Database initialized successfully")
 
