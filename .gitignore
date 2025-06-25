@@ -9,3 +9,5 @@
 *.db
 /logs
 *.pid
+/core/__pycache__
+/config/__pycache__

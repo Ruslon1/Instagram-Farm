@@ -1,6 +1,7 @@
 import os
 from typing import List, Optional
-from pydantic import BaseSettings, validator
+from pydantic import Field, field_validator
+from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
@@ -28,7 +29,7 @@ class Settings(BaseSettings):
     api_key: Optional[str] = None
 
     # CORS
-    allowed_origins: List[str] = ["http://localhost:3000", "http://127.0.0.1:3000"]
+    allowed_origins: str = "http://localhost:3000,http://127.0.0.1:3000"
 
     # File paths
     videos_dir: str = "./videos"
@@ -48,30 +49,25 @@ class Settings(BaseSettings):
     celery_broker_url: Optional[str] = None
     celery_result_backend: Optional[str] = None
 
-    @validator("celery_broker_url", pre=True, always=True)
-    def set_celery_broker(cls, v, values):
-        return v or values.get("redis_url")
-
-    @validator("celery_result_backend", pre=True, always=True)
-    def set_celery_backend(cls, v, values):
-        return v or values.get("redis_url")
-
-    @validator("allowed_origins", pre=True)
-    def parse_cors_origins(cls, v):
-        if isinstance(v, str):
-            return [origin.strip() for origin in v.split(",")]
-        return v
-
-    @validator("ms_tokens", pre=True)
-    def parse_ms_tokens(cls, v):
-        if not v:
-            return ""
-        return v
-
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"
         case_sensitive = False
+        extra = "ignore"
+
+    def get_allowed_origins(self) -> List[str]:
+        """Get parsed CORS origins as list."""
+        if isinstance(self.allowed_origins, str):
+            return [origin.strip() for origin in self.allowed_origins.split(",")]
+        return self.allowed_origins
+
+    def get_celery_broker_url(self) -> str:
+        """Get Celery broker URL."""
+        return self.celery_broker_url or self.redis_url
+
+    def get_celery_result_backend(self) -> str:
+        """Get Celery result backend URL."""
+        return self.celery_result_backend or self.redis_url
 
     def is_production(self) -> bool:
         """Check if running in production environment."""

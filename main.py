@@ -1,6 +1,13 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
-import os
+from fastapi.responses import JSONResponse
+import time
+import uuid
+
+# Import configuration and core modules
+from config.settings import settings
+from core.logging import setup_logging, get_logger, log_api_request
+from core.security import SecurityHeaders
 
 # Import API routers
 from api.accounts import router as accounts_router
@@ -12,21 +19,135 @@ from api.tiktok_sources import router as tiktok_sources_router
 # Import existing modules for initialization
 from modules.database import init_database
 
+# Setup logging first
+setup_logging()
+logger = get_logger("main")
+
 # Initialize FastAPI
 app = FastAPI(
-    title="Instagram Bot API",
-    description="Web interface for Instagram Bot with Proxy Support",
-    version="1.1.0"
+    title=settings.app_name,
+    description="Production-ready Instagram Bot with Proxy Support",
+    version=settings.app_version,
+    debug=settings.debug,
+    docs_url="/docs" if settings.is_development() else None,
+    redoc_url="/redoc" if settings.is_development() else None
 )
 
-# CORS for frontend
+# Security headers
+security_headers = SecurityHeaders()
+
+
+@app.middleware("http")
+async def add_security_headers(request: Request, call_next):
+    """Add security headers to all responses."""
+    start_time = time.time()
+
+    # Generate request ID for tracing
+    request_id = str(uuid.uuid4())
+
+    # Log API request
+    log_api_request(
+        method=request.method,
+        path=request.url.path,
+        request_id=request_id,
+        user_agent=request.headers.get("user-agent"),
+        client_ip=request.client.host
+    )
+
+    response = await call_next(request)
+
+    # Add security headers
+    for header, value in security_headers.get_security_headers().items():
+        response.headers[header] = value
+
+    # Add custom headers
+    response.headers["X-Request-ID"] = request_id
+    response.headers["X-Response-Time"] = str(time.time() - start_time)
+
+    return response
+
+
+# CORS configuration
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_origins=settings.get_allowed_origins(),
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH"],
     allow_headers=["*"],
+    expose_headers=["X-Request-ID", "X-Response-Time"]
 )
+
+
+# Health check endpoints
+@app.get("/health")
+async def health_check():
+    """Basic health check."""
+    return {
+        "status": "healthy",
+        "version": settings.app_version,
+        "environment": settings.environment,
+        "timestamp": time.time()
+    }
+
+
+@app.get("/health/detailed")
+async def detailed_health_check():
+    """Detailed health check with dependencies."""
+    health_status = {
+        "status": "healthy",
+        "version": settings.app_version,
+        "environment": settings.environment,
+        "timestamp": time.time(),
+        "checks": {
+            "database": "unknown",
+            "redis": "unknown",
+            "filesystem": "unknown"
+        }
+    }
+
+    # Check database connection
+    try:
+        # This is a simple check - will be improved when we migrate to PostgreSQL
+        from modules.database import get_database_connection
+        with get_database_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT 1")
+            health_status["checks"]["database"] = "healthy"
+    except Exception as e:
+        health_status["checks"]["database"] = f"unhealthy: {str(e)}"
+        health_status["status"] = "degraded"
+
+    # Check Redis connection
+    try:
+        import redis
+        from urllib.parse import urlparse
+        parsed_url = urlparse(settings.redis_url)
+        r = redis.Redis(
+            host=parsed_url.hostname,
+            port=parsed_url.port,
+            password=parsed_url.password,
+            decode_responses=True
+        )
+        r.ping()
+        health_status["checks"]["redis"] = "healthy"
+    except Exception as e:
+        health_status["checks"]["redis"] = f"unhealthy: {str(e)}"
+        health_status["status"] = "degraded"
+
+    # Check filesystem
+    try:
+        import os
+        for directory in [settings.videos_dir, settings.sessions_dir, settings.logs_dir]:
+            if not os.path.exists(directory):
+                os.makedirs(directory, exist_ok=True)
+        health_status["checks"]["filesystem"] = "healthy"
+    except Exception as e:
+        health_status["checks"]["filesystem"] = f"unhealthy: {str(e)}"
+        health_status["status"] = "degraded"
+
+    status_code = 200 if health_status["status"] == "healthy" else 503
+    return JSONResponse(content=health_status, status_code=status_code)
+
 
 # Include API routers
 app.include_router(accounts_router, prefix="/api/accounts", tags=["accounts"])
@@ -35,34 +156,107 @@ app.include_router(tasks_router, prefix="/api/tasks", tags=["tasks"])
 app.include_router(stats_router, prefix="/api/stats", tags=["statistics"])
 app.include_router(tiktok_sources_router, prefix="/api/tiktok-sources", tags=["tiktok-sources"])
 
+
+# Global exception handler
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    """Global exception handler for unhandled errors."""
+    logger.error(
+        "Unhandled exception",
+        path=request.url.path,
+        method=request.method,
+        error_type=type(exc).__name__,
+        error_message=str(exc),
+        exc_info=True
+    )
+
+    if settings.is_development():
+        return JSONResponse(
+            status_code=500,
+            content={
+                "error": "Internal server error",
+                "type": type(exc).__name__,
+                "message": str(exc),
+                "path": request.url.path
+            }
+        )
+    else:
+        return JSONResponse(
+            status_code=500,
+            content={
+                "error": "Internal server error",
+                "message": "An unexpected error occurred"
+            }
+        )
+
+
 # Initialize on startup
 @app.on_event("startup")
 async def startup():
-    init_database()
-    os.makedirs("videos", exist_ok=True)
-    os.makedirs("sessions", exist_ok=True)
-    print("✅ FastAPI server started with proxy support")
-    print("📡 Proxy features:")
-    print("  - Individual account proxy configuration")
-    print("  - Automatic proxy testing and health monitoring")
-    print("  - Fallback to direct connection on proxy failure")
-    print("  - Real-time proxy status tracking")
+    """Initialize application on startup."""
+    logger.info("Starting Instagram Bot API", version=settings.app_version, environment=settings.environment)
+
+    try:
+        # Initialize database
+        init_database()
+        logger.info("Database initialized successfully")
+
+        # Create required directories
+        import os
+        for directory in [settings.videos_dir, settings.sessions_dir, settings.logs_dir]:
+            os.makedirs(directory, exist_ok=True)
+        logger.info("Required directories created")
+
+        # Log configuration
+        logger.info(
+            "Application configuration",
+            database_url=settings.database_url.split("@")[
+                -1] if "@" in settings.database_url else settings.database_url,
+            redis_url=settings.redis_url.split("@")[-1] if "@" in settings.redis_url else settings.redis_url,
+            allowed_origins=settings.get_allowed_origins(),
+            debug=settings.debug
+        )
+
+        logger.info("Instagram Bot API started successfully")
+
+    except Exception as e:
+        logger.error("Failed to start application", error=str(e), exc_info=True)
+        raise
+
+
+@app.on_event("shutdown")
+async def shutdown():
+    """Cleanup on shutdown."""
+    logger.info("Shutting down Instagram Bot API")
+
 
 @app.get("/")
 async def root():
+    """Root endpoint with API information."""
     return {
-        "message": "Instagram Bot API with Proxy Support",
+        "message": f"{settings.app_name} - Production Ready",
+        "version": settings.app_version,
+        "environment": settings.environment,
         "status": "running",
-        "version": "1.1.0",
+        "docs_url": "/docs" if settings.is_development() else "disabled_in_production",
         "features": [
-            "Account management",
-            "Video processing",
-            "Task management",
-            "Proxy support",
-            "Health monitoring"
+            "Account management with proxy support",
+            "Video processing and upload",
+            "Task management with progress tracking",
+            "Health monitoring",
+            "Structured logging",
+            "Security headers"
         ]
     }
 
+
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+
+    uvicorn.run(
+        "main:app",
+        host="0.0.0.0",
+        port=8000,
+        reload=settings.is_development(),
+        log_level="debug" if settings.debug else "info"
+    )

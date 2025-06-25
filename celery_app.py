@@ -1,13 +1,14 @@
 from celery import Celery
 from celery.signals import worker_shutting_down
+from config.settings import settings
 import os
 import sys
 
 
 app = Celery(
     "instagram_bot",
-    broker="redis://localhost:6379/0",
-    backend="redis://localhost:6379/0"
+    broker=settings.get_celery_broker_url(),
+    backend=settings.get_celery_result_backend()
 )
 
 app.conf.update(

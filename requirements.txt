@@ -25,7 +25,8 @@ alembic>=1.8.0
 sqlalchemy>=1.4.0
 
 # Configuration & Settings
-pydantic[dotenv]>=1.10.0
+pydantic>=2.0.0
+pydantic-settings>=2.0.0
 
 # Security
 python-jose[cryptography]>=3.3.0
