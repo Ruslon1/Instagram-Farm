@@ -12,12 +12,28 @@ TikTokApi
 playwright
 httpx
 filelock>=3.0.0
+opencv-python>=4.8.0
 
 # FastAPI dependencies
 fastapi>=0.104.0
 uvicorn[standard]>=0.24.0
 python-multipart
 
+# Database
+psycopg2-binary>=2.9.0
+alembic>=1.8.0
+sqlalchemy>=1.4.0
 
-# Video processing for duration checks
-opencv-python>=4.8.0
+# Configuration & Settings
+pydantic[dotenv]>=1.10.0
+
+# Security
+python-jose[cryptography]>=3.3.0
+passlib[bcrypt]>=1.7.4
+
+# Logging & Monitoring
+structlog>=22.3.0
+prometheus-client>=0.15.0
+
+# Production server
+gunicorn>=20.1.0
