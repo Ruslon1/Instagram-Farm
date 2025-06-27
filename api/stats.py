@@ -14,19 +14,23 @@ async def get_stats():
             cursor = conn.cursor()
 
             # Count active accounts
-            cursor.execute("SELECT COUNT(*) FROM accounts WHERE COALESCE(active, 1) = 1")
+            cursor.execute(
+                "SELECT COUNT(*) FROM accounts WHERE CASE WHEN active IS NULL THEN TRUE ELSE active END = TRUE"
+            )
             active_accounts = cursor.fetchone()[0]
 
             # Count pending videos
-            cursor.execute("SELECT COUNT(*) FROM videos WHERE COALESCE(status, 'pending') = 'pending'")
+            cursor.execute(
+                "SELECT COUNT(*) FROM videos WHERE CASE WHEN status IS NULL THEN 'pending' ELSE status END = 'pending'"
+            )
             pending_videos = cursor.fetchone()[0]
 
             # Count posts today
             cursor.execute('''
-                           SELECT COUNT(*)
-                           FROM publicationhistory
-                           WHERE DATE (created_at) = DATE ('now')
-                           ''')
+                SELECT COUNT(*)
+                FROM publicationhistory
+                WHERE DATE(created_at) = CURRENT_DATE
+            ''')
             posts_today = cursor.fetchone()[0]
 
             # Count running tasks

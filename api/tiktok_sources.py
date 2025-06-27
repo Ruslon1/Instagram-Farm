@@ -18,11 +18,11 @@ async def get_tiktok_sources(theme: Optional[str] = None, active_only: bool = Tr
             params = []
 
             if theme:
-                query += " AND theme = ?"
+                query += " AND theme = %s"
                 params.append(theme)
 
             if active_only:
-                query += " AND active = 1"
+                query += " AND active = TRUE"
 
             query += " ORDER BY theme, tiktok_username"
 
@@ -55,7 +55,7 @@ async def create_tiktok_source(source: TikTokSourceCreate):
 
             # Check if source already exists
             cursor.execute(
-                "SELECT id FROM tiktok_sources WHERE theme = ? AND tiktok_username = ?",
+                "SELECT id FROM tiktok_sources WHERE theme = %s AND tiktok_username = %s",
                 (source.theme, source.tiktok_username)
             )
 
@@ -64,16 +64,17 @@ async def create_tiktok_source(source: TikTokSourceCreate):
 
             # Insert new source
             cursor.execute('''
-                           INSERT INTO tiktok_sources (theme, tiktok_username, active, created_at)
-                           VALUES (?, ?, ?, ?)
-                           ''', (source.theme, source.tiktok_username, source.active, datetime.now().isoformat()))
+                INSERT INTO tiktok_sources (theme, tiktok_username, active, created_at)
+                VALUES (%s, %s, %s, %s)
+                RETURNING id
+            ''', (source.theme, source.tiktok_username, source.active, datetime.now().isoformat()))
 
-            source_id = cursor.lastrowid
+            source_id = cursor.fetchone()[0]
             conn.commit()
 
             # Return the created source
             cursor.execute(
-                "SELECT id, theme, tiktok_username, active, last_fetch, videos_count, created_at FROM tiktok_sources WHERE id = ?",
+                "SELECT id, theme, tiktok_username, active, last_fetch, videos_count, created_at FROM tiktok_sources WHERE id = %s",
                 (source_id,)
             )
             row = cursor.fetchone()
@@ -102,7 +103,7 @@ async def update_tiktok_source(source_id: int, source: TikTokSourceUpdate):
             cursor = conn.cursor()
 
             # Check if source exists
-            cursor.execute("SELECT id FROM tiktok_sources WHERE id = ?", (source_id,))
+            cursor.execute("SELECT id FROM tiktok_sources WHERE id = %s", (source_id,))
             if not cursor.fetchone():
                 raise HTTPException(status_code=404, detail="TikTok source not found")
 
@@ -111,26 +112,26 @@ async def update_tiktok_source(source_id: int, source: TikTokSourceUpdate):
             params = []
 
             if source.theme is not None:
-                update_fields.append("theme = ?")
+                update_fields.append("theme = %s")
                 params.append(source.theme)
 
             if source.tiktok_username is not None:
-                update_fields.append("tiktok_username = ?")
+                update_fields.append("tiktok_username = %s")
                 params.append(source.tiktok_username)
 
             if source.active is not None:
-                update_fields.append("active = ?")
+                update_fields.append("active = %s")
                 params.append(source.active)
 
             if update_fields:
-                query = f"UPDATE tiktok_sources SET {', '.join(update_fields)} WHERE id = ?"
+                query = f"UPDATE tiktok_sources SET {', '.join(update_fields)} WHERE id = %s"
                 params.append(source_id)
                 cursor.execute(query, params)
                 conn.commit()
 
             # Return updated source
             cursor.execute(
-                "SELECT id, theme, tiktok_username, active, last_fetch, videos_count, created_at FROM tiktok_sources WHERE id = ?",
+                "SELECT id, theme, tiktok_username, active, last_fetch, videos_count, created_at FROM tiktok_sources WHERE id = %s",
                 (source_id,)
             )
             row = cursor.fetchone()
@@ -159,12 +160,12 @@ async def delete_tiktok_source(source_id: int):
             cursor = conn.cursor()
 
             # Check if source exists
-            cursor.execute("SELECT id FROM tiktok_sources WHERE id = ?", (source_id,))
+            cursor.execute("SELECT id FROM tiktok_sources WHERE id = %s", (source_id,))
             if not cursor.fetchone():
                 raise HTTPException(status_code=404, detail="TikTok source not found")
 
             # Delete the source
-            cursor.execute("DELETE FROM tiktok_sources WHERE id = ?", (source_id,))
+            cursor.execute("DELETE FROM tiktok_sources WHERE id = %s", (source_id,))
             conn.commit()
 
             return {"message": f"TikTok source {source_id} deleted successfully"}
@@ -184,14 +185,15 @@ async def get_themes():
 
             # Get themes from both accounts and tiktok_sources
             cursor.execute('''
-                           SELECT DISTINCT theme
-                           FROM (SELECT theme
-                                 FROM accounts
-                                 UNION
-                                 SELECT theme
-                                 FROM tiktok_sources)
-                           ORDER BY theme
-                           ''')
+                SELECT DISTINCT theme
+                FROM (
+                    SELECT theme FROM accounts
+                    UNION
+                    SELECT theme FROM tiktok_sources
+                ) AS combined_themes
+                WHERE theme IS NOT NULL
+                ORDER BY theme
+            ''')
 
             themes = [row[0] for row in cursor.fetchall() if row[0]]
             return {"themes": themes}
@@ -208,12 +210,11 @@ async def get_sources_by_theme(theme: str):
             cursor = conn.cursor()
 
             cursor.execute('''
-                           SELECT id, theme, tiktok_username, active, last_fetch, videos_count, created_at
-                           FROM tiktok_sources
-                           WHERE theme = ?
-                             AND active = 1
-                           ORDER BY tiktok_username
-                           ''', (theme,))
+                SELECT id, theme, tiktok_username, active, last_fetch, videos_count, created_at
+                FROM tiktok_sources
+                WHERE theme = %s AND active = TRUE
+                ORDER BY tiktok_username
+            ''', (theme,))
 
             sources = []
             for row in cursor.fetchall():
@@ -241,11 +242,11 @@ async def update_source_stats(source_id: int, videos_fetched: int):
             cursor = conn.cursor()
 
             cursor.execute('''
-                           UPDATE tiktok_sources
-                           SET last_fetch   = ?,
-                               videos_count = videos_count + ?
-                           WHERE id = ?
-                           ''', (datetime.now().isoformat(), videos_fetched, source_id))
+                UPDATE tiktok_sources
+                SET last_fetch = %s,
+                    videos_count = videos_count + %s
+                WHERE id = %s
+            ''', (datetime.now().isoformat(), videos_fetched, source_id))
 
             conn.commit()
 

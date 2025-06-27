@@ -19,34 +19,28 @@ class TaskService:
             with get_database_connection() as conn:
                 cursor = conn.cursor()
 
-                # Create task_logs table if it doesn't exist (with new columns)
-                cursor.execute('''
-                    CREATE TABLE IF NOT EXISTS task_logs (
-                        id TEXT PRIMARY KEY,
-                        task_type TEXT NOT NULL,
-                        status TEXT NOT NULL,
-                        account_username TEXT,
-                        message TEXT,
-                        progress INTEGER DEFAULT 0,
-                        total_items INTEGER DEFAULT 0,
-                        current_item TEXT,
-                        next_action_at TIMESTAMP,
-                        cooldown_seconds INTEGER,
-                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                    )
-                ''')
-
                 # Calculate next action time if cooldown is provided
                 next_action_at = None
                 if cooldown_seconds and status == "running":
                     next_action_at = (datetime.now() + timedelta(seconds=cooldown_seconds)).isoformat()
 
-                # Insert or update task log
+                # Insert or update task log (PostgreSQL compatible)
                 cursor.execute('''
-                    INSERT OR REPLACE INTO task_logs 
+                    INSERT INTO task_logs 
                     (id, task_type, status, account_username, message, progress, total_items, 
                      current_item, next_action_at, cooldown_seconds, created_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    ON CONFLICT (id) DO UPDATE SET
+                        task_type = EXCLUDED.task_type,
+                        status = EXCLUDED.status,
+                        account_username = EXCLUDED.account_username,
+                        message = EXCLUDED.message,
+                        progress = EXCLUDED.progress,
+                        total_items = EXCLUDED.total_items,
+                        current_item = EXCLUDED.current_item,
+                        next_action_at = EXCLUDED.next_action_at,
+                        cooldown_seconds = EXCLUDED.cooldown_seconds,
+                        created_at = EXCLUDED.created_at
                 ''', (task_id, task_type, status, account_username, message,
                       progress or 0, total_items or 0, current_item, next_action_at,
                       cooldown_seconds, datetime.now().isoformat()))
@@ -62,55 +56,22 @@ class TaskService:
         with get_database_connection() as conn:
             cursor = conn.cursor()
 
-            # Ensure all columns exist
-            cursor.execute("PRAGMA table_info(task_logs)")
-            columns = [row[1] for row in cursor.fetchall()]
-
-            # Build select statement based on available columns
-            base_fields = "id, task_type, status, account_username, message, created_at"
-
-            additional_fields = []
-            if "progress" in columns:
-                additional_fields.append("progress")
-            else:
-                additional_fields.append("0 as progress")
-
-            if "total_items" in columns:
-                additional_fields.append("total_items")
-            else:
-                additional_fields.append("0 as total_items")
-
-            if "current_item" in columns:
-                additional_fields.append("current_item")
-            else:
-                additional_fields.append("NULL as current_item")
-
-            if "next_action_at" in columns:
-                additional_fields.append("next_action_at")
-            else:
-                additional_fields.append("NULL as next_action_at")
-
-            if "cooldown_seconds" in columns:
-                additional_fields.append("cooldown_seconds")
-            else:
-                additional_fields.append("NULL as cooldown_seconds")
-
-            select_fields = f"{base_fields}, {', '.join(additional_fields)}"
-
             if status:
-                cursor.execute(f'''
-                    SELECT {select_fields}
+                cursor.execute('''
+                    SELECT id, task_type, status, account_username, message, created_at,
+                           progress, total_items, current_item, next_action_at, cooldown_seconds
                     FROM task_logs 
-                    WHERE status = ?
+                    WHERE status = %s
                     ORDER BY created_at DESC 
-                    LIMIT ?
+                    LIMIT %s
                 ''', (status, limit))
             else:
-                cursor.execute(f'''
-                    SELECT {select_fields}
+                cursor.execute('''
+                    SELECT id, task_type, status, account_username, message, created_at,
+                           progress, total_items, current_item, next_action_at, cooldown_seconds
                     FROM task_logs 
                     ORDER BY created_at DESC 
-                    LIMIT ?
+                    LIMIT %s
                 ''', (limit,))
 
             tasks = []
@@ -146,9 +107,13 @@ class TaskService:
 
                 cursor.execute('''
                     UPDATE task_logs 
-                    SET progress = ?, current_item = ?, message = ?, 
-                        next_action_at = ?, cooldown_seconds = ?, created_at = ?
-                    WHERE id = ?
+                    SET progress = %s, 
+                        current_item = %s, 
+                        message = %s, 
+                        next_action_at = %s, 
+                        cooldown_seconds = %s, 
+                        created_at = %s
+                    WHERE id = %s
                 ''', (progress, current_item, message, next_action_at,
                       cooldown_seconds, datetime.now().isoformat(), task_id))
 
@@ -168,16 +133,21 @@ class TaskService:
                 if status in ["success", "failed", "cancelled"]:
                     cursor.execute('''
                         UPDATE task_logs 
-                        SET status = ?, message = ?, next_action_at = NULL, 
-                            cooldown_seconds = NULL, created_at = ?, 
+                        SET status = %s, 
+                            message = %s, 
+                            next_action_at = NULL, 
+                            cooldown_seconds = NULL, 
+                            created_at = %s, 
                             progress = CASE WHEN status = 'running' THEN progress ELSE 100 END
-                        WHERE id = ?
+                        WHERE id = %s
                     ''', (status, message, datetime.now().isoformat(), task_id))
                 else:
                     cursor.execute('''
                         UPDATE task_logs 
-                        SET status = ?, message = ?, created_at = ?
-                        WHERE id = ?
+                        SET status = %s, 
+                            message = %s, 
+                            created_at = %s
+                        WHERE id = %s
                     ''', (status, message, datetime.now().isoformat(), task_id))
 
                 conn.commit()
@@ -197,11 +167,11 @@ class TaskService:
 
                 cursor.execute('''
                     SELECT id, task_type, status, account_username, message, created_at,
-                           COALESCE(progress, 0) as progress,
-                           COALESCE(total_items, 0) as total_items,
+                           CASE WHEN progress IS NULL THEN 0 ELSE progress END as progress,
+                           CASE WHEN total_items IS NULL THEN 0 ELSE total_items END as total_items,
                            current_item, next_action_at, cooldown_seconds
                     FROM task_logs 
-                    WHERE id = ?
+                    WHERE id = %s
                 ''', (task_id,))
 
                 row = cursor.fetchone()

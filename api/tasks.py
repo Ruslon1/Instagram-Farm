@@ -39,18 +39,28 @@ async def fetch_videos(request: FetchRequest):
             # Save new videos to database
             with get_database_connection() as conn:
                 cursor = conn.cursor()
+                inserted_count = 0
+
                 for video_link in new_videos:
-                    cursor.execute(
-                        "INSERT OR IGNORE INTO videos (link, theme, status) VALUES (?, ?, 'pending')",
-                        (video_link, request.theme)
-                    )
+                    try:
+                        cursor.execute(
+                            "INSERT INTO videos (link, theme, status) VALUES (%s, %s, 'pending') ON CONFLICT (link, theme) DO NOTHING",
+                            (video_link, request.theme)
+                        )
+                        # Check if row was actually inserted
+                        if cursor.rowcount > 0:
+                            inserted_count += 1
+                    except Exception as e:
+                        print(f"Error inserting video {video_link}: {e}")
+                        continue
+
                 conn.commit()
 
             await TaskService.log_task(
                 task_id=task_id,
                 task_type="fetch",
                 status="success",
-                message=f"Fetched {len(new_videos)} new videos for {request.theme}",
+                message=f"Fetched {inserted_count} new videos for {request.theme}",
                 progress=100,
                 total_items=len(request.source_usernames)
             )
@@ -58,8 +68,8 @@ async def fetch_videos(request: FetchRequest):
             return {
                 "success": True,
                 "task_id": task_id,
-                "message": f"Fetched {len(new_videos)} new videos",
-                "videos_count": len(new_videos)
+                "message": f"Fetched {inserted_count} new videos",
+                "videos_count": inserted_count
             }
 
         except Exception as e:
@@ -85,7 +95,7 @@ async def upload_videos(request: UploadRequest):
         with get_database_connection() as conn:
             cursor = conn.cursor()
             cursor.execute(
-                'SELECT username, password, theme, "2FAKey" FROM accounts WHERE username = ?',
+                'SELECT username, password, theme, "2FAKey" FROM accounts WHERE username = %s',
                 (request.account_username,)
             )
             account_data = cursor.fetchone()
@@ -93,22 +103,33 @@ async def upload_videos(request: UploadRequest):
             if not account_data:
                 raise HTTPException(status_code=404, detail="Account not found")
 
+        # Convert account_data to list/tuple for Celery
+        account_list = [
+            account_data[0],  # username
+            account_data[1],  # password
+            account_data[2],  # theme
+            account_data[3]  # 2FAKey
+        ]
+
         # Get environment variables
         TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
         TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
+        if not TELEGRAM_TOKEN or not TELEGRAM_CHAT_ID:
+            raise HTTPException(status_code=500, detail="Telegram configuration missing")
+
         # Start Celery task (this will handle its own logging)
         celery_task = process_video_with_progress.delay(
-            account_data,
+            account_list,
             request.video_links,
             TELEGRAM_TOKEN,
             TELEGRAM_CHAT_ID
         )
 
-        # Return Celery task ID as our task ID (no duplicate logging)
+        # Return Celery task ID as our task ID
         return {
             "success": True,
-            "task_id": celery_task.id,  # Use Celery task ID directly
+            "task_id": celery_task.id,
             "celery_task_id": celery_task.id,
             "message": f"Upload task started for {len(request.video_links)} videos",
             "total_videos": len(request.video_links),
@@ -142,18 +163,24 @@ async def get_task_progress(task_id: str):
         remaining_time = None
         if task.next_action_at and task.status == "running":
             try:
-                next_action = datetime.fromisoformat(task.next_action_at.replace('Z', '+00:00'))
+                # Parse datetime string properly
+                if 'T' in task.next_action_at:
+                    next_action = datetime.fromisoformat(task.next_action_at.replace('Z', '+00:00'))
+                else:
+                    next_action = datetime.strptime(task.next_action_at, '%Y-%m-%d %H:%M:%S')
+
                 now = datetime.now()
                 remaining_seconds = int((next_action - now).total_seconds())
                 remaining_time = max(0, remaining_seconds)
-            except:
+            except Exception as dt_error:
+                print(f"Error parsing datetime {task.next_action_at}: {dt_error}")
                 remaining_time = None
 
         return {
             "task_id": task.id,
             "status": task.status,
-            "progress": task.progress,
-            "total_items": task.total_items,
+            "progress": task.progress or 0,
+            "total_items": task.total_items or 0,
             "current_item": task.current_item,
             "message": task.message,
             "account_username": task.account_username,
@@ -186,9 +213,125 @@ async def cancel_task(task_id: str):
             message="Task cancelled by user request"
         )
 
+        # Try to revoke Celery task if it's a Celery task
+        try:
+            from celery_app import app as celery_app
+            celery_app.control.revoke(task_id, terminate=True)
+            print(f"Celery task {task_id} revoked")
+        except Exception as celery_error:
+            print(f"Could not revoke Celery task {task_id}: {celery_error}")
+
         return {"message": f"Task {task_id} cancellation requested"}
 
     except HTTPException:
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to cancel task: {str(e)}")
+
+
+@router.delete("/{task_id}")
+async def delete_task(task_id: str):
+    """Delete a task from the database"""
+    try:
+        with get_database_connection() as conn:
+            cursor = conn.cursor()
+
+            # Check if task exists
+            cursor.execute("SELECT id FROM task_logs WHERE id = %s", (task_id,))
+            if not cursor.fetchone():
+                raise HTTPException(status_code=404, detail="Task not found")
+
+            # Delete the task
+            cursor.execute("DELETE FROM task_logs WHERE id = %s", (task_id,))
+            conn.commit()
+
+            return {"message": f"Task {task_id} deleted successfully"}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to delete task: {str(e)}")
+
+
+@router.post("/cleanup")
+async def cleanup_old_tasks():
+    """Clean up old completed tasks"""
+    try:
+        with get_database_connection() as conn:
+            cursor = conn.cursor()
+
+            # Delete tasks older than 7 days that are completed
+            cursor.execute('''
+                           DELETE
+                           FROM task_logs
+                           WHERE status IN ('success', 'failed', 'cancelled')
+                             AND created_at < NOW() - INTERVAL '7 days'
+                           ''')
+
+            deleted_count = cursor.rowcount
+            conn.commit()
+
+            return {
+                "message": f"Cleaned up {deleted_count} old tasks",
+                "deleted_count": deleted_count
+            }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to cleanup tasks: {str(e)}")
+
+
+@router.get("/stats")
+async def get_task_stats():
+    """Get task statistics"""
+    try:
+        with get_database_connection() as conn:
+            cursor = conn.cursor()
+
+            # Get task counts by status
+            cursor.execute('''
+                           SELECT status, COUNT(*) as count
+                           FROM task_logs
+                           GROUP BY status
+                           ORDER BY count DESC
+                           ''')
+
+            status_stats = {row[0]: row[1] for row in cursor.fetchall()}
+
+            # Get task counts by type
+            cursor.execute('''
+                           SELECT task_type, COUNT(*) as count
+                           FROM task_logs
+                           GROUP BY task_type
+                           ORDER BY count DESC
+                           ''')
+
+            type_stats = {row[0]: row[1] for row in cursor.fetchall()}
+
+            # Get recent task counts (last 24 hours)
+            cursor.execute('''
+                           SELECT COUNT(*) as count
+                           FROM task_logs
+                           WHERE created_at > NOW() - INTERVAL '24 hours'
+                           ''')
+
+            recent_count = cursor.fetchone()[0]
+
+            # Get running tasks count
+            cursor.execute('''
+                           SELECT COUNT(*) as count
+                           FROM task_logs
+                           WHERE status = 'running'
+                           ''')
+
+            running_count = cursor.fetchone()[0]
+
+            return {
+                "total_tasks": sum(status_stats.values()),
+                "running_tasks": running_count,
+                "recent_tasks_24h": recent_count,
+                "by_status": status_stats,
+                "by_type": type_stats
+            }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get task stats: {str(e)}")

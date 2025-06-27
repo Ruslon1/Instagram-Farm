@@ -14,26 +14,23 @@ async def get_videos(theme: Optional[str] = None, limit: int = 100):
         with get_database_connection() as conn:
             cursor = conn.cursor()
 
-            # Add status column if it doesn't exist
-            try:
-                cursor.execute("ALTER TABLE videos ADD COLUMN status TEXT DEFAULT 'pending'")
-                conn.commit()
-            except:
-                pass
-
             if theme:
                 cursor.execute('''
-                               SELECT link, theme, COALESCE(status, 'pending') as status, created_at
-                               FROM videos
-                               WHERE theme = ?
-                               ORDER BY rowid DESC LIMIT ?
-                               ''', (theme, limit))
+                    SELECT link, theme, 
+                           CASE WHEN status IS NULL THEN 'pending' ELSE status END as status, 
+                           created_at
+                    FROM videos
+                    WHERE theme = %s
+                    ORDER BY created_at DESC LIMIT %s
+                ''', (theme, limit))
             else:
                 cursor.execute('''
-                               SELECT link, theme, COALESCE(status, 'pending') as status, created_at
-                               FROM videos
-                               ORDER BY rowid DESC LIMIT ?
-                               ''', (limit,))
+                    SELECT link, theme, 
+                           CASE WHEN status IS NULL THEN 'pending' ELSE status END as status, 
+                           created_at
+                    FROM videos
+                    ORDER BY created_at DESC LIMIT %s
+                ''', (limit,))
 
             videos = []
             for row in cursor.fetchall():
@@ -58,12 +55,12 @@ async def delete_video(video_link: str):
             cursor = conn.cursor()
 
             # Check if video exists
-            cursor.execute("SELECT link FROM videos WHERE link = ?", (video_link,))
+            cursor.execute("SELECT link FROM videos WHERE link = %s", (video_link,))
             if not cursor.fetchone():
                 raise HTTPException(status_code=404, detail="Video not found")
 
             # Delete the video
-            cursor.execute("DELETE FROM videos WHERE link = ?", (video_link,))
+            cursor.execute("DELETE FROM videos WHERE link = %s", (video_link,))
             conn.commit()
 
             return {"message": f"Video deleted successfully", "deleted_link": video_link}
@@ -89,10 +86,10 @@ async def bulk_delete_videos(video_links: List[str]):
 
             for video_link in video_links:
                 # Check if video exists
-                cursor.execute("SELECT link FROM videos WHERE link = ?", (video_link,))
+                cursor.execute("SELECT link FROM videos WHERE link = %s", (video_link,))
                 if cursor.fetchone():
                     # Delete the video
-                    cursor.execute("DELETE FROM videos WHERE link = ?", (video_link,))
+                    cursor.execute("DELETE FROM videos WHERE link = %s", (video_link,))
                     deleted_count += 1
                 else:
                     not_found.append(video_link)
@@ -122,12 +119,12 @@ async def delete_videos_by_theme(theme: str, status: Optional[str] = None):
             if status:
                 # Delete videos with specific status
                 cursor.execute(
-                    "DELETE FROM videos WHERE theme = ? AND COALESCE(status, 'pending') = ?",
+                    "DELETE FROM videos WHERE theme = %s AND CASE WHEN status IS NULL THEN 'pending' ELSE status END = %s",
                     (theme, status)
                 )
             else:
                 # Delete all videos for theme
-                cursor.execute("DELETE FROM videos WHERE theme = ?", (theme,))
+                cursor.execute("DELETE FROM videos WHERE theme = %s", (theme,))
 
             deleted_count = cursor.rowcount
             conn.commit()
@@ -158,7 +155,7 @@ async def delete_videos_by_status(status: str):
             cursor = conn.cursor()
 
             cursor.execute(
-                "DELETE FROM videos WHERE COALESCE(status, 'pending') = ?",
+                "DELETE FROM videos WHERE CASE WHEN status IS NULL THEN 'pending' ELSE status END = %s",
                 (status,)
             )
 
@@ -192,13 +189,13 @@ async def update_video_status(video_link: str, new_status: str):
             cursor = conn.cursor()
 
             # Check if video exists
-            cursor.execute("SELECT link FROM videos WHERE link = ?", (video_link,))
+            cursor.execute("SELECT link FROM videos WHERE link = %s", (video_link,))
             if not cursor.fetchone():
                 raise HTTPException(status_code=404, detail="Video not found")
 
             # Update video status
             cursor.execute(
-                "UPDATE videos SET status = ? WHERE link = ?",
+                "UPDATE videos SET status = %s WHERE link = %s",
                 (new_status, video_link)
             )
             conn.commit()
@@ -224,31 +221,34 @@ async def get_video_stats():
 
             # Get total counts by status
             cursor.execute('''
-                           SELECT COALESCE(status, 'pending') as status, COUNT(*) as count
-                           FROM videos
-                           GROUP BY COALESCE (status, 'pending')
-                           ORDER BY count DESC
-                           ''')
+                SELECT CASE WHEN status IS NULL THEN 'pending' ELSE status END as status, 
+                       COUNT(*) as count
+                FROM videos
+                GROUP BY CASE WHEN status IS NULL THEN 'pending' ELSE status END
+                ORDER BY count DESC
+            ''')
 
             status_stats = {row[0]: row[1] for row in cursor.fetchall()}
 
             # Get total counts by theme
             cursor.execute('''
-                           SELECT theme, COUNT(*) as count
-                           FROM videos
-                           GROUP BY theme
-                           ORDER BY count DESC
-                           ''')
+                SELECT theme, COUNT(*) as count
+                FROM videos
+                GROUP BY theme
+                ORDER BY count DESC
+            ''')
 
             theme_stats = {row[0]: row[1] for row in cursor.fetchall()}
 
             # Get combined stats (theme + status)
             cursor.execute('''
-                           SELECT theme, COALESCE(status, 'pending') as status, COUNT(*) as count
-                           FROM videos
-                           GROUP BY theme, COALESCE (status, 'pending')
-                           ORDER BY theme, status
-                           ''')
+                SELECT theme, 
+                       CASE WHEN status IS NULL THEN 'pending' ELSE status END as status, 
+                       COUNT(*) as count
+                FROM videos
+                GROUP BY theme, CASE WHEN status IS NULL THEN 'pending' ELSE status END
+                ORDER BY theme, status
+            ''')
 
             combined_stats = {}
             for row in cursor.fetchall():
