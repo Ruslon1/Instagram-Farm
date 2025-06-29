@@ -88,15 +88,14 @@ services:
   frontend:
     build:
       context: ./frontend
-      dockerfile: ./frontend/Dockerfile
+      dockerfile: Dockerfile
     ports:
       - "3000:80"
     environment:
-      - REACT_APP_API_URL=http://94.131.86.226:-localhost:8000/api
+      - REACT_APP_API_URL=http://${VM_EXTERNAL_IP:-localhost}:8000/api
     restart: unless-stopped
     depends_on:
       - app
-
 
 
 volumes:
