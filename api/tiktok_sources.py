@@ -7,6 +7,15 @@ from modules.database import get_database_connection
 router = APIRouter()
 
 
+def convert_datetime_to_string(dt_value):
+    """Convert datetime to ISO string safely"""
+    if dt_value is None:
+        return None
+    if hasattr(dt_value, 'isoformat'):
+        return dt_value.isoformat()
+    return str(dt_value)
+
+
 @router.get("/", response_model=List[TikTokSource])
 async def get_tiktok_sources(theme: Optional[str] = None, active_only: bool = True):
     """Get all TikTok sources with optional filtering"""
@@ -35,9 +44,9 @@ async def get_tiktok_sources(theme: Optional[str] = None, active_only: bool = Tr
                     theme=row[1],
                     tiktok_username=row[2],
                     active=bool(row[3]),
-                    last_fetch=row[4],
+                    last_fetch=convert_datetime_to_string(row[4]),
                     videos_count=row[5] or 0,
-                    created_at=row[6]
+                    created_at=convert_datetime_to_string(row[6])
                 ))
 
             return sources
@@ -65,9 +74,9 @@ async def create_tiktok_source(source: TikTokSourceCreate):
             # Insert new source
             cursor.execute('''
                 INSERT INTO tiktok_sources (theme, tiktok_username, active, created_at)
-                VALUES (%s, %s, %s, %s)
+                VALUES (%s, %s, %s, CURRENT_TIMESTAMP)
                 RETURNING id
-            ''', (source.theme, source.tiktok_username, source.active, datetime.now().isoformat()))
+            ''', (source.theme, source.tiktok_username, source.active))
 
             source_id = cursor.fetchone()[0]
             conn.commit()
@@ -84,9 +93,9 @@ async def create_tiktok_source(source: TikTokSourceCreate):
                 theme=row[1],
                 tiktok_username=row[2],
                 active=bool(row[3]),
-                last_fetch=row[4],
+                last_fetch=convert_datetime_to_string(row[4]),
                 videos_count=row[5] or 0,
-                created_at=row[6]
+                created_at=convert_datetime_to_string(row[6])
             )
 
     except HTTPException:
@@ -141,9 +150,9 @@ async def update_tiktok_source(source_id: int, source: TikTokSourceUpdate):
                 theme=row[1],
                 tiktok_username=row[2],
                 active=bool(row[3]),
-                last_fetch=row[4],
+                last_fetch=convert_datetime_to_string(row[4]),
                 videos_count=row[5] or 0,
-                created_at=row[6]
+                created_at=convert_datetime_to_string(row[6])
             )
 
     except HTTPException:
@@ -223,9 +232,9 @@ async def get_sources_by_theme(theme: str):
                     theme=row[1],
                     tiktok_username=row[2],
                     active=bool(row[3]),
-                    last_fetch=row[4],
+                    last_fetch=convert_datetime_to_string(row[4]),
                     videos_count=row[5] or 0,
-                    created_at=row[6]
+                    created_at=convert_datetime_to_string(row[6])
                 ))
 
             return sources
@@ -243,10 +252,10 @@ async def update_source_stats(source_id: int, videos_fetched: int):
 
             cursor.execute('''
                 UPDATE tiktok_sources
-                SET last_fetch = %s,
+                SET last_fetch = CURRENT_TIMESTAMP,
                     videos_count = videos_count + %s
                 WHERE id = %s
-            ''', (datetime.now().isoformat(), videos_fetched, source_id))
+            ''', (videos_fetched, source_id))
 
             conn.commit()
 
