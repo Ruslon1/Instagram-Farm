@@ -13,8 +13,9 @@ def get_download_link(tiktok_url):
     """Get download link for TikTok video using Selenium."""
     options = Options()
 
-    # Add Chrome options from settings
-    for option in settings.chrome_options:
+    # Add Chrome options from settings (исправляем использование)
+    chrome_options_list = settings.get_chrome_options_list()
+    for option in chrome_options_list:
         options.add_argument(option)
 
     # Additional Docker-specific options

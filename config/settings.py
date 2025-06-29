@@ -36,14 +36,8 @@ class Settings(BaseSettings):
     sessions_dir: str = "./sessions"
     logs_dir: str = "./logs"
 
-    # Selenium settings
-    chrome_options: List[str] = [
-        "--headless",
-        "--no-sandbox",
-        "--disable-dev-shm-usage",
-        "--disable-gpu",
-        "--disable-software-rasterizer"
-    ]
+    # Selenium settings - исправляем парсинг
+    chrome_options: str = "--headless,--no-sandbox,--disable-dev-shm-usage,--disable-gpu,--disable-software-rasterizer"
 
     # Celery settings
     celery_broker_url: Optional[str] = None
@@ -60,6 +54,12 @@ class Settings(BaseSettings):
         if isinstance(self.allowed_origins, str):
             return [origin.strip() for origin in self.allowed_origins.split(",")]
         return self.allowed_origins
+
+    def get_chrome_options_list(self) -> List[str]:
+        """Get Chrome options as list."""
+        if isinstance(self.chrome_options, str):
+            return [option.strip() for option in self.chrome_options.split(",")]
+        return self.chrome_options
 
     def get_celery_broker_url(self) -> str:
         """Get Celery broker URL."""
