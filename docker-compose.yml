@@ -85,6 +85,20 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:80"
+    environment:
+      - REACT_APP_API_URL=http://94.131.86.226:-localhost:8000/api
+    restart: unless-stopped
+    depends_on:
+      - app
+
+
+
 volumes:
   postgres_data:
   redis_data:
