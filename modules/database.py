@@ -10,7 +10,7 @@ logger = get_logger("database")
 
 @contextmanager
 def get_database_connection():
-    """Get database connection context manager."""
+    """Get database connection context manager with better error handling."""
     conn = None
     try:
         if settings.database_url.startswith('postgresql'):
@@ -22,23 +22,55 @@ def get_database_connection():
                 user=url.username,
                 password=url.password,
                 database=url.path[1:],  # Remove leading /
-                cursor_factory=psycopg2.extras.RealDictCursor
+                # Use DictCursor for easier column access
+                cursor_factory=psycopg2.extras.DictCursor
             )
         else:
             # SQLite fallback for development
             import sqlite3
-            conn = sqlite3.connect(settings.database_url.replace('sqlite:///', ''))
+            db_path = settings.database_url.replace('sqlite:///', '')
+            conn = sqlite3.connect(db_path)
             conn.row_factory = sqlite3.Row
 
         yield conn
     except Exception as e:
         logger.error("Database connection error", error=str(e))
         if conn:
-            conn.rollback()
+            try:
+                conn.rollback()
+            except:
+                pass
         raise
     finally:
         if conn:
-            conn.close()
+            try:
+                conn.close()
+            except:
+                pass
+
+
+def safe_fetchone(cursor, default=None):
+    """Safely fetch one result with default value."""
+    try:
+        result = cursor.fetchone()
+        if result:
+            return result
+        return default
+    except Exception as e:
+        print(f"Error in fetchone: {e}")
+        return default
+
+
+def safe_fetchall(cursor, default=None):
+    """Safely fetch all results with default value."""
+    try:
+        result = cursor.fetchall()
+        if result:
+            return result
+        return default or []
+    except Exception as e:
+        print(f"Error in fetchall: {e}")
+        return default or []
 
 
 def init_database():
@@ -427,33 +459,44 @@ def init_database():
         raise
 
 
-# PostgreSQL-compatible functions
+# PostgreSQL-compatible functions with better error handling
 def load_accounts_and_videos():
     """Load accounts and videos (compatibility function)."""
-    with get_database_connection() as conn:
-        cursor = conn.cursor()
+    try:
+        with get_database_connection() as conn:
+            cursor = conn.cursor()
 
-        cursor.execute('SELECT username, password, theme, "2FAKey" FROM accounts')
-        accounts = cursor.fetchall()
+            # Get accounts with safe fetching
+            cursor.execute('SELECT username, password, theme, "2FAKey" FROM accounts')
+            accounts = safe_fetchall(cursor, [])
 
-        cursor.execute("SELECT link, theme FROM videos")
-        all_videos = cursor.fetchall()
+            # Get all videos with safe fetching
+            cursor.execute("SELECT link, theme FROM videos")
+            all_videos = safe_fetchall(cursor, [])
 
-        cursor.execute("SELECT account_username, video_link FROM publicationhistory")
-        published = cursor.fetchall()
-        published_set = set(published)
+            # Get published videos with safe fetching
+            cursor.execute("SELECT account_username, video_link FROM publicationhistory")
+            published = safe_fetchall(cursor, [])
+            published_set = set(published) if published else set()
 
-        account_to_videos = {}
-        for link, theme in all_videos:
-            if theme not in account_to_videos:
-                account_to_videos[theme] = []
-            account_to_videos[theme].append(link)
+            # Group videos by theme
+            account_to_videos = {}
+            for video_row in all_videos:
+                if len(video_row) >= 2:
+                    link, theme = video_row[0], video_row[1]
+                    if theme not in account_to_videos:
+                        account_to_videos[theme] = []
+                    account_to_videos[theme].append(link)
 
-        return accounts, account_to_videos, published_set
+            return accounts, account_to_videos, published_set
+
+    except Exception as e:
+        logger.error("Error loading accounts and videos", error=str(e))
+        return [], {}, set()
 
 
 def record_publication(username, video_link):
-    """Record video publication."""
+    """Record video publication with better error handling."""
     try:
         with get_database_connection() as conn:
             cursor = conn.cursor()
@@ -477,7 +520,7 @@ def record_publication(username, video_link):
 
 
 def record_video(video_link, theme):
-    """Record video."""
+    """Record video with better error handling."""
     try:
         with get_database_connection() as conn:
             cursor = conn.cursor()
@@ -501,7 +544,7 @@ def record_video(video_link, theme):
 
 
 def get_existing_video_links_for_theme(theme):
-    """Get existing video links for theme."""
+    """Get existing video links for theme with better error handling."""
     try:
         with get_database_connection() as conn:
             cursor = conn.cursor()
@@ -511,7 +554,8 @@ def get_existing_video_links_for_theme(theme):
             else:
                 cursor.execute("SELECT link FROM videos WHERE theme = ?", (theme,))
 
-            links = {row[0] for row in cursor.fetchall()}
+            results = safe_fetchall(cursor, [])
+            links = {row[0] for row in results if row and len(row) > 0}
             return links
     except Exception as e:
         logger.error("Failed to get existing video links", error=str(e))
@@ -519,7 +563,7 @@ def get_existing_video_links_for_theme(theme):
 
 
 def is_video_published(username, video_link):
-    """Check if video was published by user."""
+    """Check if video was published by user with better error handling."""
     try:
         with get_database_connection() as conn:
             cursor = conn.cursor()
@@ -539,7 +583,8 @@ def is_video_published(username, video_link):
                                  AND video_link = ?
                                ''', (username, video_link))
 
-            exists = cursor.fetchone() is not None
+            result = safe_fetchone(cursor)
+            exists = result is not None
             return exists
     except Exception as e:
         logger.error("Failed to check video publication", error=str(e))
