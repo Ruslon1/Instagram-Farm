@@ -1,274 +1,93 @@
 #!/bin/bash
 
-VM_IP="94.131.86.226"
+echo "🗄️ Fixing Database Issues..."
 
-echo "🔧 Fixing Frontend API URL for VM IP: $VM_IP"
+# Check database connection
+echo "📡 Testing database connection..."
+docker-compose exec postgres pg_isready -U instagram_bot && echo "✅ Database connection OK" || echo "❌ Database connection failed"
 
-# Update frontend API configuration for VM
-cat > frontend/src/services/api.ts << EOF
-import axios from 'axios';
-import type { Account, AccountCreate, Video, TaskLog, Stats, FetchRequest, UploadRequest, TikTokSource, TikTokSourceCreate, TaskProgress, ProxySettings, ProxyTestResult } from '../types';
-
-const api = axios.create({
-  baseURL: 'http://$VM_IP:8000/api',
-  timeout: 15000,
-  headers: {
-    'Content-Type': 'application/json',
-  },
-});
-
-// Add request interceptor for debugging
-api.interceptors.request.use(
-  (config) => {
-    console.log(\`🔄 API Request: \${config.method?.toUpperCase()} \${config.url}\`);
-    return config;
-  },
-  (error) => {
-    console.error('❌ API Request Error:', error);
-    return Promise.reject(error);
-  }
-);
-
-// Add response interceptor for debugging
-api.interceptors.response.use(
-  (response) => {
-    console.log(\`✅ API Response: \${response.status} \${response.config.url}\`);
-    return response;
-  },
-  (error) => {
-    console.error('❌ API Response Error:', error.response?.status, error.message);
-    console.error('URL:', error.config?.url);
-    console.error('Response:', error.response?.data);
-    return Promise.reject(error);
-  }
-);
-
-// Accounts API
-export const accountsApi = {
-  getAll: async (): Promise<Account[]> => {
-    const response = await api.get('/accounts');
-    return response.data;
-  },
-
-  create: async (account: AccountCreate): Promise<{ message: string }> => {
-    const response = await api.post('/accounts', account);
-    return response.data;
-  },
-
-  updateProxy: async (username: string, proxySettings: ProxySettings): Promise<{ message: string }> => {
-    const response = await api.put(\`/accounts/\${username}/proxy\`, proxySettings);
-    return response.data;
-  },
-
-  removeProxy: async (username: string): Promise<{ message: string }> => {
-    const response = await api.delete(\`/accounts/\${username}/proxy\`);
-    return response.data;
-  },
-
-  testProxy: async (username: string): Promise<ProxyTestResult> => {
-    const response = await api.post(\`/accounts/\${username}/proxy/test\`);
-    return response.data;
-  },
-
-  getProxy: async (username: string): Promise<any> => {
-    const response = await api.get(\`/accounts/\${username}/proxy\`);
-    return response.data;
-  },
-};
-
-// Videos API
-export const videosApi = {
-  getAll: async (theme?: string, limit = 100): Promise<Video[]> => {
-    const params = new URLSearchParams();
-    if (theme) params.append('theme', theme);
-    params.append('limit', limit.toString());
-
-    const response = await api.get(\`/videos?\${params}\`);
-    return response.data;
-  },
-
-  delete: async (videoLink: string): Promise<{ message: string }> => {
-    const response = await api.delete(\`/videos/\${encodeURIComponent(videoLink)}\`);
-    return response.data;
-  },
-
-  bulkDelete: async (videoLinks: string[]): Promise<any> => {
-    const response = await api.post('/videos/bulk-delete', videoLinks);
-    return response.data;
-  },
-
-  deleteByTheme: async (theme: string, status?: string): Promise<any> => {
-    const params = status ? \`?status=\${status}\` : '';
-    const response = await api.delete(\`/videos/by-theme/\${theme}\${params}\`);
-    return response.data;
-  },
-
-  deleteByStatus: async (status: string): Promise<any> => {
-    const response = await api.delete(\`/videos/by-status/\${status}\`);
-    return response.data;
-  },
-
-  updateStatus: async (videoLink: string, newStatus: string): Promise<any> => {
-    const response = await api.patch(\`/videos/\${encodeURIComponent(videoLink)}/status?new_status=\${newStatus}\`);
-    return response.data;
-  },
-
-  getStats: async (): Promise<any> => {
-    const response = await api.get('/videos/stats');
-    return response.data;
-  },
-};
-
-// TikTok Sources API
-export const tikTokSourcesApi = {
-  getAll: async (theme?: string, activeOnly = true): Promise<TikTokSource[]> => {
-    const params = new URLSearchParams();
-    if (theme) params.append('theme', theme);
-    params.append('active_only', activeOnly.toString());
-
-    const response = await api.get(\`/tiktok-sources?\${params}\`);
-    return response.data;
-  },
-
-  create: async (source: TikTokSourceCreate): Promise<TikTokSource> => {
-    const response = await api.post('/tiktok-sources', source);
-    return response.data;
-  },
-
-  update: async (id: number, source: Partial<TikTokSourceCreate>): Promise<TikTokSource> => {
-    const response = await api.put(\`/tiktok-sources/\${id}\`, source);
-    return response.data;
-  },
-
-  delete: async (id: number): Promise<{ message: string }> => {
-    const response = await api.delete(\`/tiktok-sources/\${id}\`);
-    return response.data;
-  },
-
-  getThemes: async (): Promise<{ themes: string[] }> => {
-    const response = await api.get('/tiktok-sources/themes');
-    return response.data;
-  },
-
-  getByTheme: async (theme: string): Promise<TikTokSource[]> => {
-    const response = await api.get(\`/tiktok-sources/by-theme/\${theme}\`);
-    return response.data;
-  },
-};
-
-// Tasks API
-export const tasksApi = {
-  getAll: async (status?: string, limit = 50): Promise<TaskLog[]> => {
-    const params = new URLSearchParams();
-    if (status) params.append('status', status);
-    params.append('limit', limit.toString());
-
-    const response = await api.get(\`/tasks?\${params}\`);
-    return response.data;
-  },
-
-  fetchVideos: async (request: FetchRequest): Promise<{ success: boolean; task_id: string; message: string; videos_count: number }> => {
-    const response = await api.post('/tasks/fetch', request);
-    return response.data;
-  },
-
-  uploadVideos: async (request: UploadRequest): Promise<{ success: boolean; task_id: string; celery_task_id: string; message: string; total_videos: number; account: string }> => {
-    const response = await api.post('/tasks/upload', request);
-    return response.data;
-  },
-
-  getProgress: async (taskId: string): Promise<TaskProgress> => {
-    const response = await api.get(\`/tasks/\${taskId}/progress\`);
-    return response.data;
-  },
-
-  cancelTask: async (taskId: string): Promise<{ message: string }> => {
-    const response = await api.post(\`/tasks/\${taskId}/cancel\`);
-    return response.data;
-  },
-};
-
-// Stats API
-export const statsApi = {
-  get: async (): Promise<Stats> => {
-    const response = await api.get('/stats');
-    return response.data;
-  },
-};
-
-// Proxy monitoring API
-export const proxyApi = {
-  getMetrics: async (): Promise<any> => {
-    const response = await api.get('/proxy/metrics');
-    return response.data;
-  },
-
-  getUptimeStats: async (): Promise<any> => {
-    const response = await api.get('/proxy/uptime');
-    return response.data;
-  },
-
-  getPerformanceTrends: async (days: number): Promise<any> => {
-    const response = await api.get(\`/proxy/performance-trends?days=\${days}\`);
-    return response.data;
-  },
-
-  getAccountsStatus: async (): Promise<any> => {
-    const response = await api.get('/proxy/accounts-status');
-    return response.data;
-  },
-
-  runManualCheck: async (): Promise<any> => {
-    const response = await api.post('/proxy/manual-check');
-    return response.data;
-  },
-
-  startScheduler: async (): Promise<any> => {
-    const response = await api.post('/proxy/scheduler/start');
-    return response.data;
-  },
-
-  stopScheduler: async (): Promise<any> => {
-    const response = await api.post('/proxy/scheduler/stop');
-    return response.data;
-  },
-
-  getSchedulerStatus: async (): Promise<any> => {
-    const response = await api.get('/proxy/scheduler/status');
-    return response.data;
-  },
-};
-
-export default api;
-EOF
-
-echo "✅ Updated frontend API URL to http://$VM_IP:8000/api"
-
-# Update docker-compose.yml to use VM IP
-echo "🔧 Updating docker-compose.yml..."
-sed -i "s/VM_EXTERNAL_IP:-localhost/VM_EXTERNAL_IP:-$VM_IP/g" docker-compose.yml
-
-# Update CORS settings in .env
-echo "🌐 Updating CORS settings..."
-if grep -q "ALLOWED_ORIGINS" .env; then
-    sed -i "s|ALLOWED_ORIGINS=.*|ALLOWED_ORIGINS=http://$VM_IP:3000,http://localhost:3000|g" .env
+# Check if database exists
+echo "🔍 Checking if database exists..."
+DB_EXISTS=$(docker-compose exec -T postgres psql -U instagram_bot -lqt | cut -d \| -f 1 | grep -w instagram_bot | wc -l)
+if [ "$DB_EXISTS" -eq 1 ]; then
+    echo "✅ Database 'instagram_bot' exists"
 else
-    echo "ALLOWED_ORIGINS=http://$VM_IP:3000,http://localhost:3000" >> .env
+    echo "❌ Database 'instagram_bot' does not exist"
+    echo "🔨 Creating database..."
+    docker-compose exec -T postgres createdb -U instagram_bot instagram_bot
 fi
 
-echo "🔨 Rebuilding frontend container..."
-docker-compose up -d --build frontend
+# Initialize database tables
+echo "🏗️ Initializing database tables..."
+docker-compose exec app python -c "
+try:
+    from modules.database import init_database
+    init_database()
+    print('✅ Database initialized successfully')
+except Exception as e:
+    print(f'❌ Database initialization failed: {e}')
+    import traceback
+    traceback.print_exc()
+"
 
-echo "⏳ Waiting for frontend to restart..."
+# Test database content
+echo "📋 Checking database tables..."
+docker-compose exec -T postgres psql -U instagram_bot -d instagram_bot -c "\dt" 2>/dev/null || echo "❌ Cannot list tables"
+
+# Check if tables have expected structure
+echo "🔍 Verifying table structure..."
+docker-compose exec -T postgres psql -U instagram_bot -d instagram_bot -c "
+SELECT table_name
+FROM information_schema.tables
+WHERE table_schema = 'public'
+ORDER BY table_name;
+" 2>/dev/null || echo "❌ Cannot query table info"
+
+# Test stats query manually
+echo "📊 Testing stats query..."
+docker-compose exec app python -c "
+try:
+    from modules.database import get_database_connection
+    with get_database_connection() as conn:
+        cursor = conn.cursor()
+
+        # Test each part of the stats query
+        print('Testing accounts count...')
+        cursor.execute('SELECT COUNT(*) FROM accounts WHERE CASE WHEN active IS NULL THEN TRUE ELSE active END = TRUE')
+        accounts = cursor.fetchone()[0]
+        print(f'Active accounts: {accounts}')
+
+        print('Testing videos count...')
+        cursor.execute('SELECT COUNT(*) FROM videos WHERE CASE WHEN status IS NULL THEN \'pending\' ELSE status END = \'pending\'')
+        videos = cursor.fetchone()[0]
+        print(f'Pending videos: {videos}')
+
+        print('Testing publications count...')
+        cursor.execute('SELECT COUNT(*) FROM publicationhistory WHERE DATE(created_at) = CURRENT_DATE')
+        posts = cursor.fetchone()[0]
+        print(f'Posts today: {posts}')
+
+        print('✅ All stats queries work')
+
+except Exception as e:
+    print(f'❌ Stats query failed: {e}')
+    import traceback
+    traceback.print_exc()
+"
+
+# Restart app to ensure clean state
+echo "🔄 Restarting app..."
+docker-compose restart app
+
+echo "⏳ Waiting for app to restart..."
 sleep 10
 
-echo ""
-echo "🎯 Testing connectivity:"
-echo "Backend health: \$(curl -s -o /dev/null -w "%{http_code}" http://$VM_IP:8000/health)"
-echo "Frontend: \$(curl -s -o /dev/null -w "%{http_code}" http://$VM_IP:3000)"
+# Test the stats endpoint
+echo "🌐 Testing stats API endpoint..."
+curl -s http://94.131.86.226:8000/api/stats | jq '.' 2>/dev/null || curl -s http://94.131.86.226:8000/api/stats
 
 echo ""
-echo "✅ Configuration updated!"
-echo "🌐 Frontend: http://$VM_IP:3000"
-echo "🔧 Backend: http://$VM_IP:8000"
-echo "📚 API Docs: http://$VM_IP:8000/docs"
+echo "🎯 Manual test commands:"
+echo "  curl http://94.131.86.226:8000/api/stats"
+echo "  docker-compose logs app"
+echo "  docker-compose exec app python -c \"from modules.database import get_database_connection; print('DB works')\""
