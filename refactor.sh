@@ -1,8 +1,16 @@
+#!/bin/bash
+
+VM_IP="94.131.86.226"
+
+echo "🔧 Fixing Frontend API URL for VM IP: $VM_IP"
+
+# Update frontend API configuration for VM
+cat > frontend/src/services/api.ts << EOF
 import axios from 'axios';
 import type { Account, AccountCreate, Video, TaskLog, Stats, FetchRequest, UploadRequest, TikTokSource, TikTokSourceCreate, TaskProgress, ProxySettings, ProxyTestResult } from '../types';
 
 const api = axios.create({
-  baseURL: 'http://94.131.86.226:8000/api',
+  baseURL: 'http://$VM_IP:8000/api',
   timeout: 15000,
   headers: {
     'Content-Type': 'application/json',
@@ -12,7 +20,7 @@ const api = axios.create({
 // Add request interceptor for debugging
 api.interceptors.request.use(
   (config) => {
-    console.log(`🔄 API Request: ${config.method?.toUpperCase()} ${config.url}`);
+    console.log(\`🔄 API Request: \${config.method?.toUpperCase()} \${config.url}\`);
     return config;
   },
   (error) => {
@@ -24,7 +32,7 @@ api.interceptors.request.use(
 // Add response interceptor for debugging
 api.interceptors.response.use(
   (response) => {
-    console.log(`✅ API Response: ${response.status} ${response.config.url}`);
+    console.log(\`✅ API Response: \${response.status} \${response.config.url}\`);
     return response;
   },
   (error) => {
@@ -48,22 +56,22 @@ export const accountsApi = {
   },
 
   updateProxy: async (username: string, proxySettings: ProxySettings): Promise<{ message: string }> => {
-    const response = await api.put(`/accounts/${username}/proxy`, proxySettings);
+    const response = await api.put(\`/accounts/\${username}/proxy\`, proxySettings);
     return response.data;
   },
 
   removeProxy: async (username: string): Promise<{ message: string }> => {
-    const response = await api.delete(`/accounts/${username}/proxy`);
+    const response = await api.delete(\`/accounts/\${username}/proxy\`);
     return response.data;
   },
 
   testProxy: async (username: string): Promise<ProxyTestResult> => {
-    const response = await api.post(`/accounts/${username}/proxy/test`);
+    const response = await api.post(\`/accounts/\${username}/proxy/test\`);
     return response.data;
   },
 
   getProxy: async (username: string): Promise<any> => {
-    const response = await api.get(`/accounts/${username}/proxy`);
+    const response = await api.get(\`/accounts/\${username}/proxy\`);
     return response.data;
   },
 };
@@ -75,12 +83,12 @@ export const videosApi = {
     if (theme) params.append('theme', theme);
     params.append('limit', limit.toString());
 
-    const response = await api.get(`/videos?${params}`);
+    const response = await api.get(\`/videos?\${params}\`);
     return response.data;
   },
 
   delete: async (videoLink: string): Promise<{ message: string }> => {
-    const response = await api.delete(`/videos/${encodeURIComponent(videoLink)}`);
+    const response = await api.delete(\`/videos/\${encodeURIComponent(videoLink)}\`);
     return response.data;
   },
 
@@ -90,18 +98,18 @@ export const videosApi = {
   },
 
   deleteByTheme: async (theme: string, status?: string): Promise<any> => {
-    const params = status ? `?status=${status}` : '';
-    const response = await api.delete(`/videos/by-theme/${theme}${params}`);
+    const params = status ? \`?status=\${status}\` : '';
+    const response = await api.delete(\`/videos/by-theme/\${theme}\${params}\`);
     return response.data;
   },
 
   deleteByStatus: async (status: string): Promise<any> => {
-    const response = await api.delete(`/videos/by-status/${status}`);
+    const response = await api.delete(\`/videos/by-status/\${status}\`);
     return response.data;
   },
 
   updateStatus: async (videoLink: string, newStatus: string): Promise<any> => {
-    const response = await api.patch(`/videos/${encodeURIComponent(videoLink)}/status?new_status=${newStatus}`);
+    const response = await api.patch(\`/videos/\${encodeURIComponent(videoLink)}/status?new_status=\${newStatus}\`);
     return response.data;
   },
 
@@ -118,7 +126,7 @@ export const tikTokSourcesApi = {
     if (theme) params.append('theme', theme);
     params.append('active_only', activeOnly.toString());
 
-    const response = await api.get(`/tiktok-sources?${params}`);
+    const response = await api.get(\`/tiktok-sources?\${params}\`);
     return response.data;
   },
 
@@ -128,12 +136,12 @@ export const tikTokSourcesApi = {
   },
 
   update: async (id: number, source: Partial<TikTokSourceCreate>): Promise<TikTokSource> => {
-    const response = await api.put(`/tiktok-sources/${id}`, source);
+    const response = await api.put(\`/tiktok-sources/\${id}\`, source);
     return response.data;
   },
 
   delete: async (id: number): Promise<{ message: string }> => {
-    const response = await api.delete(`/tiktok-sources/${id}`);
+    const response = await api.delete(\`/tiktok-sources/\${id}\`);
     return response.data;
   },
 
@@ -143,7 +151,7 @@ export const tikTokSourcesApi = {
   },
 
   getByTheme: async (theme: string): Promise<TikTokSource[]> => {
-    const response = await api.get(`/tiktok-sources/by-theme/${theme}`);
+    const response = await api.get(\`/tiktok-sources/by-theme/\${theme}\`);
     return response.data;
   },
 };
@@ -155,7 +163,7 @@ export const tasksApi = {
     if (status) params.append('status', status);
     params.append('limit', limit.toString());
 
-    const response = await api.get(`/tasks?${params}`);
+    const response = await api.get(\`/tasks?\${params}\`);
     return response.data;
   },
 
@@ -170,12 +178,12 @@ export const tasksApi = {
   },
 
   getProgress: async (taskId: string): Promise<TaskProgress> => {
-    const response = await api.get(`/tasks/${taskId}/progress`);
+    const response = await api.get(\`/tasks/\${taskId}/progress\`);
     return response.data;
   },
 
   cancelTask: async (taskId: string): Promise<{ message: string }> => {
-    const response = await api.post(`/tasks/${taskId}/cancel`);
+    const response = await api.post(\`/tasks/\${taskId}/cancel\`);
     return response.data;
   },
 };
@@ -201,7 +209,7 @@ export const proxyApi = {
   },
 
   getPerformanceTrends: async (days: number): Promise<any> => {
-    const response = await api.get(`/proxy/performance-trends?days=${days}`);
+    const response = await api.get(\`/proxy/performance-trends?days=\${days}\`);
     return response.data;
   },
 
@@ -232,3 +240,35 @@ export const proxyApi = {
 };
 
 export default api;
+EOF
+
+echo "✅ Updated frontend API URL to http://$VM_IP:8000/api"
+
+# Update docker-compose.yml to use VM IP
+echo "🔧 Updating docker-compose.yml..."
+sed -i "s/VM_EXTERNAL_IP:-localhost/VM_EXTERNAL_IP:-$VM_IP/g" docker-compose.yml
+
+# Update CORS settings in .env
+echo "🌐 Updating CORS settings..."
+if grep -q "ALLOWED_ORIGINS" .env; then
+    sed -i "s|ALLOWED_ORIGINS=.*|ALLOWED_ORIGINS=http://$VM_IP:3000,http://localhost:3000|g" .env
+else
+    echo "ALLOWED_ORIGINS=http://$VM_IP:3000,http://localhost:3000" >> .env
+fi
+
+echo "🔨 Rebuilding frontend container..."
+docker-compose up -d --build frontend
+
+echo "⏳ Waiting for frontend to restart..."
+sleep 10
+
+echo ""
+echo "🎯 Testing connectivity:"
+echo "Backend health: \$(curl -s -o /dev/null -w "%{http_code}" http://$VM_IP:8000/health)"
+echo "Frontend: \$(curl -s -o /dev/null -w "%{http_code}" http://$VM_IP:3000)"
+
+echo ""
+echo "✅ Configuration updated!"
+echo "🌐 Frontend: http://$VM_IP:3000"
+echo "🔧 Backend: http://$VM_IP:8000"
+echo "📚 API Docs: http://$VM_IP:8000/docs"
