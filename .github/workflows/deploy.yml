@@ -20,11 +20,19 @@ jobs:
           echo "🚀 Starting deployment..."
           
           # Переходим в директорию проекта
-          cd /root/instagram-bot || exit 1
+          cd /home/ruslan/instagram-bot || exit 1
+          
+          # Показываем текущую информацию
+          echo "👤 User: $(whoami)"
+          echo "📁 Directory: $(pwd)"
+          echo "📝 Current commit: $(git rev-parse HEAD)"
           
           # Пуллим последние изменения
           echo "📥 Pulling latest changes..."
           git pull origin main
+          
+          # Показываем новый коммит
+          echo "📝 New commit: $(git rev-parse HEAD)"
           
           # Останавливаем контейнеры
           echo "🛑 Stopping containers..."
@@ -35,22 +43,64 @@ jobs:
           docker-compose up -d --build
           
           # Ждем немного для запуска
-          sleep 10
+          echo "⏳ Waiting for services to start..."
+          sleep 15
           
-          # Проверяем статус
+          # Проверяем статус контейнеров
+          echo "📊 Container status:"
+          docker-compose ps
+          
+          # Проверяем здоровье сервисов
           echo "🔍 Checking service health..."
-          if curl -f http://localhost:8000/health > /dev/null 2>&1; then
-            echo "✅ Backend is healthy"
-          else
+          
+          # Backend health check с повторами
+          BACKEND_HEALTHY=false
+          for i in {1..6}; do
+            if curl -f http://localhost:8000/health > /dev/null 2>&1; then
+              echo "✅ Backend is healthy"
+              BACKEND_HEALTHY=true
+              break
+            else
+              echo "⏳ Backend not ready yet (attempt $i/6)..."
+              sleep 5
+            fi
+          done
+          
+          if [ "$BACKEND_HEALTHY" = false ]; then
             echo "❌ Backend health check failed"
-            docker-compose logs app
+            echo "📋 Backend logs:"
+            docker-compose logs --tail=10 app
           fi
           
-          if curl -f http://localhost:3000 > /dev/null 2>&1; then
-            echo "✅ Frontend is healthy"
-          else
+          # Frontend health check с повторами
+          FRONTEND_HEALTHY=false
+          for i in {1..4}; do
+            if curl -f http://localhost:3000 > /dev/null 2>&1; then
+              echo "✅ Frontend is healthy"
+              FRONTEND_HEALTHY=true
+              break
+            else
+              echo "⏳ Frontend not ready yet (attempt $i/4)..."
+              sleep 5
+            fi
+          done
+          
+          if [ "$FRONTEND_HEALTHY" = false ]; then
             echo "❌ Frontend health check failed"
-            docker-compose logs frontend
+            echo "📋 Frontend logs:"
+            docker-compose logs --tail=10 frontend
           fi
           
+          # Проверяем Celery
+          if docker-compose ps celery | grep -q "Up"; then
+            echo "✅ Celery worker is running"
+          else
+            echo "❌ Celery worker is not running"
+            echo "📋 Celery logs:"
+            docker-compose logs --tail=10 celery
+          fi
+          
+          echo ""
           echo "🎉 Deployment completed at $(date)"
+          echo "🌐 Frontend: http://94.131.86.226:3000"
+          echo "🔧 Backend: http://94.131.86.226:8000"
