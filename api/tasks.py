@@ -335,3 +335,4 @@ async def get_task_stats():
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to get task stats: {str(e)}")
+    
