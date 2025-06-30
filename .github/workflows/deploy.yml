@@ -1,0 +1,56 @@
+name: Auto Deploy to Server
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Deploy to server
+      uses: appleboy/ssh-action@v1.0.3
+      with:
+        host: ${{ secrets.HOST }}
+        username: ${{ secrets.USER }}
+        key: ${{ secrets.SSH_KEY }}
+        port: 22
+        script: |
+          echo "🚀 Starting deployment..."
+          
+          # Переходим в директорию проекта
+          cd /root/instagram-bot || exit 1
+          
+          # Пуллим последние изменения
+          echo "📥 Pulling latest changes..."
+          git pull origin main
+          
+          # Останавливаем контейнеры
+          echo "🛑 Stopping containers..."
+          docker-compose down
+          
+          # Собираем и запускаем новые контейнеры
+          echo "🔨 Building and starting containers..."
+          docker-compose up -d --build
+          
+          # Ждем немного для запуска
+          sleep 10
+          
+          # Проверяем статус
+          echo "🔍 Checking service health..."
+          if curl -f http://localhost:8000/health > /dev/null 2>&1; then
+            echo "✅ Backend is healthy"
+          else
+            echo "❌ Backend health check failed"
+            docker-compose logs app
+          fi
+          
+          if curl -f http://localhost:3000 > /dev/null 2>&1; then
+            echo "✅ Frontend is healthy"
+          else
+            echo "❌ Frontend health check failed"
+            docker-compose logs frontend
+          fi
+          
+          echo "🎉 Deployment completed at $(date)"
