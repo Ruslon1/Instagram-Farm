@@ -4,69 +4,48 @@ ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Install system dependencies including Playwright requirements
-RUN apt-get update && apt-get install -y \
-    wget \
-    gnupg \
-    unzip \
-    curl \
-    chromium \
-    chromium-driver \
-    postgresql-client \
-    # Playwright system dependencies
-    libnss3 \
-    libnspr4 \
-    libatk-bridge2.0-0 \
-    libdrm2 \
-    libxkbcommon0 \
-    libxcomposite1 \
-    libxdamage1 \
-    libxrandr2 \
-    libgbm1 \
-    libxss1 \
-    libasound2 \
-    # Virtual display for headless browsers
-    xvfb \
-    # Additional dependencies for TikTokApi
-    libasound2-dev \
-    libgtk-3-0 \
-    libgdk-pixbuf2.0-0 \
-    libxrandr2 \
-    libxcomposite1 \
-    libxcursor1 \
-    libxdamage1 \
-    libxext6 \
-    libxfixes3 \
-    libxi6 \
-    libxrender1 \
-    libxtst6 \
-    && rm -rf /var/lib/apt/lists/*
-
-# Browser environment
+# Browser environment (early for caching)
 ENV CHROME_BIN=/usr/bin/chromium
 ENV CHROME_DRIVER=/usr/bin/chromedriver
-
-# Set environment variables for headless operation
 ENV DISPLAY=:99
 ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
 ENV PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS=true
 
+# Install system dependencies in one layer (rarely changes)
+RUN apt-get update && apt-get install -y \
+    wget curl unzip gnupg \
+    postgresql-client \
+    chromium chromium-driver \
+    xvfb \
+    # Minimal Playwright deps
+    libnss3 libnspr4 libatk-bridge2.0-0 \
+    libdrm2 libxkbcommon0 libxcomposite1 \
+    libxdamage1 libxrandr2 libgbm1 \
+    libxss1 libasound2 \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
+
 WORKDIR /app
 
+# Copy requirements first (better caching)
 COPY requirements.txt .
+
+# Install Python packages (cached if requirements.txt unchanged)
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Install Playwright browsers after Python packages
+# Install Playwright browsers (cached separately)
 RUN playwright install chromium --with-deps
 
+# Create startup script
+RUN echo '#!/bin/bash\nXvfb :99 -screen 0 1024x768x24 > /dev/null 2>&1 &\nexec "$@"' > /usr/local/bin/start-app.sh && \
+    chmod +x /usr/local/bin/start-app.sh
+
+# Copy application code LAST (changes most often)
 COPY . .
 
+# Create directories
 RUN mkdir -p videos sessions logs static
-
-# Create startup script for virtual display
-RUN echo '#!/bin/bash\nXvfb :99 -screen 0 1024x768x24 &\nexec "$@"' > /usr/local/bin/start-app.sh && \
-    chmod +x /usr/local/bin/start-app.sh
 
 EXPOSE 8000
 
