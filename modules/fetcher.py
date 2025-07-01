@@ -31,21 +31,56 @@ class FanAccountFetcher:
             return
         try:
             self.api = TikTokApi()
+
+            # Docker-friendly настройки
+            playwright_options = {
+                'headless': True,  # Принудительно headless
+                'args': [
+                    '--no-sandbox',
+                    '--disable-dev-shm-usage',
+                    '--disable-gpu',
+                    '--disable-web-security',
+                    '--disable-features=VizDisplayCompositor',
+                    '--disable-background-timer-throttling',
+                    '--disable-backgrounding-occluded-windows',
+                    '--disable-renderer-backgrounding'
+                ]
+            }
+
             await self.api.create_sessions(
                 ms_tokens=ms_tokens,
                 num_sessions=1,
-                headless=False,
+                headless=True,  # Дублируем для уверенности
                 sleep_after=random.randint(5, 10),
-                browser='chromium'
+                browser='chromium',
+                playwright_options=playwright_options
             )
-            print("✅ TikTok API initialized successfully")
+            print("✅ TikTok API initialized successfully (headless mode)")
         except Exception as e:
             print(f"❌ Failed to initialize TikTok API: {e}")
-            raise
+            # Пробуем fallback без Playwright
+            try:
+                print("🔄 Trying fallback initialization...")
+                self.api = TikTokApi()
+                await self.api.create_sessions(
+                    ms_tokens=ms_tokens,
+                    num_sessions=1,
+                    headless=True,
+                    sleep_after=random.randint(5, 10)
+                )
+                print("✅ TikTok API initialized with fallback")
+            except Exception as fallback_error:
+                print(f"❌ Fallback also failed: {fallback_error}")
+                raise
 
     async def fetch_videos_from_account(self, username: str, theme: str, count: int = 20) -> List[str]:
         """Fetch latest videos from a specific TikTok account"""
-        await self.initialize_api()
+        try:
+            await self.initialize_api()
+        except Exception as init_error:
+            print(f"❌ Could not initialize TikTok API: {init_error}")
+            return []
+
         print(f"🔍 Fetching {count} videos from @{username} for theme '{theme}'")
 
         try:
@@ -79,7 +114,7 @@ class FanAccountFetcher:
                 author_username = username
                 if hasattr(video, 'author') and video.author:
                     author_username = (getattr(video.author, 'username', username) or
-                                     getattr(video.author, 'uniqueId', username) or username)
+                                       getattr(video.author, 'uniqueId', username) or username)
 
                 video_url = f"https://www.tiktok.com/@{author_username}/video/{video_id}"
                 video_info = VideoInfo(
@@ -102,18 +137,11 @@ class FanAccountFetcher:
             print(f"✅ Successfully fetched {len(videos)} videos from @{username}")
 
             # Filter new videos
-            #loop = asyncio.get_running_loop()
-            #with ThreadPoolExecutor() as pool:
-            #    existing_links = await loop.run_in_executor(
-            #        pool, get_existing_video_links_for_theme, theme
-            #    )
-
             new_videos = []
             existing_links = []
             for video in videos:
                 if video.url not in existing_links:
                     new_videos.append(video.url)
-                    #record_video(video.url, theme)
 
             print(f"🆕 Found {len(new_videos)} new videos for theme '{theme}'")
             return new_videos
@@ -125,8 +153,11 @@ class FanAccountFetcher:
     async def close(self):
         """Close TikTok API sessions"""
         if self.api:
-            await self.api.close_sessions()
-            print("🔒 TikTok API sessions closed")
+            try:
+                await self.api.close_sessions()
+                print("🔒 TikTok API sessions closed")
+            except Exception as e:
+                print(f"⚠️ Error closing TikTok API sessions: {e}")
 
 
 async def fetch_videos_for_hashtag(hashtag, count=5):
@@ -135,7 +166,8 @@ async def fetch_videos_for_hashtag(hashtag, count=5):
     return []
 
 
-async def fetch_videos_for_theme_from_accounts(theme: str, fan_accounts: List[str], videos_per_account: int = 10) -> List[str]:
+async def fetch_videos_for_theme_from_accounts(theme: str, fan_accounts: List[str], videos_per_account: int = 10) -> \
+List[str]:
     """
     Fetch videos from multiple fan accounts for a specific theme
 
@@ -194,5 +226,6 @@ if __name__ == "__main__":
         print(f"Found {len(videos)} new videos:")
         for i, url in enumerate(videos, 1):
             print(f"  {i}. {url}")
+
 
     asyncio.run(test())
