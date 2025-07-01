@@ -1,40 +1,39 @@
-# Existing dependencies
-celery
-redis
-requests
-selenium
-instagrapi
-Pillow>=8.1.1
-python-telegram-bot>=20.0
-webdriver-manager
-moviepy==1.0.3
-TikTokApi
-playwright
-httpx
-filelock>=3.0.0
-opencv-python>=4.8.0
-
-# FastAPI dependencies
+# Core FastAPI
 fastapi>=0.104.0
 uvicorn[standard]>=0.24.0
 python-multipart
 
 # Database
 psycopg2-binary>=2.9.0
-alembic>=1.8.0
 sqlalchemy>=1.4.0
 
-# Configuration & Settings
+# Background tasks
+celery
+redis
+
+# HTTP requests
+requests
+httpx
+
+# Configuration
 pydantic>=2.0.0
 pydantic-settings>=2.0.0
 
-# Security
-python-jose[cryptography]>=3.3.0
-passlib[bcrypt]>=1.7.4
+# Instagram/TikTok
+instagrapi
+TikTokApi
+playwright
 
-# Logging & Monitoring
+# Utils
+Pillow>=8.1.1
+selenium
+webdriver-manager
+
+# Notifications
+python-telegram-bot>=20.0
+
+# Logging
 structlog>=22.3.0
-prometheus-client>=0.15.0
 
 # Production server
 gunicorn>=20.1.0

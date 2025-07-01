@@ -16,6 +16,8 @@ jobs:
         username: ${{ secrets.USER }}
         key: ${{ secrets.SSH_KEY }}
         port: 22
+        timeout: 20m
+        command_timeout: 30m
         script: |
           echo "🚀 Starting deployment..."
           
@@ -38,9 +40,15 @@ jobs:
           echo "🛑 Stopping containers..."
           docker-compose down
           
-          # Собираем и запускаем новые контейнеры
+          # Собираем и запускаем новые контейнеры с кэшированием
           echo "🔨 Building and starting containers..."
-          docker-compose up -d --build
+          
+          # Используем buildx для лучшего кэширования
+          export DOCKER_BUILDKIT=1
+          export COMPOSE_DOCKER_CLI_BUILD=1
+          
+          docker-compose build --parallel
+          docker-compose up -d
           
           # Ждем немного для запуска
           echo "⏳ Waiting for services to start..."
