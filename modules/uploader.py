@@ -1,6 +1,6 @@
 from pathlib import Path
 from instagrapi import Client
-from instagrapi.exceptions import LoginRequired
+from instagrapi.exceptions import LoginRequired, ChallengeRequired, PleaseWaitFewMinutes, RecaptchaChallengeForm
 from modules.logger import telegram_notify
 from modules.proxy_utils import get_account_proxy_config, get_instagrapi_proxy_settings
 import time
@@ -164,6 +164,83 @@ def perform_login(cl: Client, username: str, password: str, two_fa_key: str = No
         return False
 
 
+def test_instagram_connection(username: str, password: str, two_fa_key: str = None) -> bool:
+    """Test Instagram connection and create session without uploading."""
+    try:
+        print(f"🧪 Testing Instagram connection for @{username}")
+
+        cl = Client()
+        cl.delay_range = [1, 3]
+        cl.request_timeout = 30
+
+        # Configure proxy if available
+        proxy_config = get_account_proxy_config(username)
+        if proxy_config and proxy_config.get('active'):
+            try:
+                proxy_settings = get_instagrapi_proxy_settings(proxy_config)
+                cl.set_proxy(proxy_settings['proxy'])
+                if 'proxy_port' in proxy_settings:
+                    cl.proxy_port = proxy_settings['proxy_port']
+                if 'proxy_username' in proxy_settings:
+                    cl.proxy_username = proxy_settings['proxy_username']
+                if 'proxy_password' in proxy_settings:
+                    cl.proxy_password = proxy_settings['proxy_password']
+                print(f"🌐 Testing with proxy: {proxy_config['host']}:{proxy_config['port']}")
+            except Exception as e:
+                print(f"⚠️ Proxy setup failed, testing without proxy: {e}")
+
+        session_path = get_session_path(username)
+
+        # Try login and create session
+        if perform_login(cl, username, password, two_fa_key, session_path):
+            # Test basic API calls to verify everything works
+            try:
+                # Get user info
+                user_info = cl.user_info_by_username(username)
+                print(f"✅ Connection test successful for @{username}")
+                print(f"📊 Account info: {user_info.follower_count} followers")
+
+                # Test timeline feed
+                timeline = cl.get_timeline_feed()
+                print(f"📱 Timeline feed accessible: {len(timeline)} items")
+
+                return True
+            except Exception as api_error:
+                print(f"❌ API test failed for @{username}: {api_error}")
+                # Clean up session if API tests fail
+                try:
+                    session_path.unlink(missing_ok=True)
+                except:
+                    pass
+                return False
+        else:
+            return False
+
+    except ChallengeRequired as e:
+        print(f"❌ Challenge required for @{username}: {e}")
+        print("📋 Account may need to complete security challenge manually")
+        return False
+    except PleaseWaitFewMinutes as e:
+        print(f"⏰ Rate limit for @{username}: {e}")
+        print("📋 Instagram is asking to wait - try again later")
+        return False
+    except RecaptchaChallengeForm as e:
+        print(f"🤖 reCAPTCHA challenge for @{username}: {e}")
+        print("📋 Account may need manual verification")
+        return False
+    except Exception as e:
+        print(f"❌ Connection test failed for @{username}: {e}")
+
+        # Clean up any created session files on error
+        try:
+            session_path = get_session_path(username)
+            session_path.unlink(missing_ok=True)
+        except:
+            pass
+
+        return False
+
+
 def cleanup_session(username: str):
     """Remove session file for username."""
     try:
@@ -175,35 +252,58 @@ def cleanup_session(username: str):
         print(f"⚠️ Error cleaning up session for @{username}: {e}")
 
 
-def test_instagram_connection(username: str, password: str, two_fa_key: str = None) -> bool:
-    """Test Instagram connection without uploading."""
+def verify_session_exists(username: str) -> bool:
+    """Check if session file exists for username."""
+    session_path = get_session_path(username)
+    return session_path.exists()
+
+
+def get_session_info(username: str) -> dict:
+    """Get information about existing session."""
+    session_path = get_session_path(username)
+
+    if not session_path.exists():
+        return {
+            "exists": False,
+            "path": str(session_path),
+            "size": 0,
+            "created": None
+        }
+
     try:
-        print(f"🧪 Testing Instagram connection for @{username}")
+        stat = session_path.stat()
+        return {
+            "exists": True,
+            "path": str(session_path),
+            "size": stat.st_size,
+            "created": stat.st_ctime,
+            "modified": stat.st_mtime
+        }
+    except Exception as e:
+        return {
+            "exists": True,
+            "path": str(session_path),
+            "error": str(e)
+        }
 
+
+def validate_session(username: str) -> bool:
+    """Validate existing session by testing it."""
+    session_path = get_session_path(username)
+
+    if not session_path.exists():
+        print(f"❌ No session file for @{username}")
+        return False
+
+    try:
         cl = Client()
-        cl.delay_range = [1, 3]
-        cl.request_timeout = 15
+        cl.load_settings(session_path)
 
-        # Configure proxy if available
-        proxy_config = get_account_proxy_config(username)
-        if proxy_config and proxy_config.get('active'):
-            try:
-                proxy_settings = get_instagrapi_proxy_settings(proxy_config)
-                cl.set_proxy(proxy_settings['proxy'])
-                print(f"🌐 Testing with proxy: {proxy_config['host']}:{proxy_config['port']}")
-            except Exception as e:
-                print(f"⚠️ Proxy setup failed, testing without proxy: {e}")
-
-        # Try login
-        if perform_login(cl, username, password, two_fa_key):
-            # Test basic API call
-            user_info = cl.user_info_by_username(username)
-            print(f"✅ Connection test successful for @{username}")
-            print(f"📊 Account info: {user_info.follower_count} followers")
-            return True
-        else:
-            return False
+        # Test session validity
+        cl.get_timeline_feed()
+        print(f"✅ Session valid for @{username}")
+        return True
 
     except Exception as e:
-        print(f"❌ Connection test failed for @{username}: {e}")
+        print(f"❌ Session invalid for @{username}: {e}")
         return False

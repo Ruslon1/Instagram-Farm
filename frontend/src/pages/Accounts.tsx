@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, User, Calendar, TrendingUp, Globe, CheckCircle, XCircle, Clock, Settings } from 'lucide-react';
+import { Plus, User, Calendar, TrendingUp, Globe, CheckCircle, XCircle, Clock, Settings, Shield, RefreshCw } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { accountsApi } from '../services/api';
 import ProxyModal from '../components/ProxyModal';
@@ -10,6 +10,7 @@ const Accounts = () => {
   const [showForm, setShowForm] = useState(false);
   const [showProxyModal, setShowProxyModal] = useState(false);
   const [selectedAccount, setSelectedAccount] = useState<string>('');
+  const [isVerifying, setIsVerifying] = useState<string>(''); // Track which account is being verified
   const [formData, setFormData] = useState<AccountCreate>({
     username: '',
     password: '',
@@ -28,12 +29,25 @@ const Accounts = () => {
     mutationFn: accountsApi.create,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['accounts'] });
-      toast.success('Account created successfully!');
+      toast.success('Account created and verified successfully!');
       setShowForm(false);
       setFormData({ username: '', password: '', theme: '', two_fa_key: '' });
     },
     onError: (error: any) => {
       toast.error(error.response?.data?.detail || 'Failed to create account');
+    },
+  });
+
+  const verifyMutation = useMutation({
+    mutationFn: accountsApi.verify,
+    onSuccess: (_data, username) => {
+      queryClient.invalidateQueries({ queryKey: ['accounts'] });
+      toast.success(`Account @${username} verified successfully!`);
+      setIsVerifying('');
+    },
+    onError: (error: any, username) => {
+      toast.error(error.response?.data?.detail || `Failed to verify @${username}`);
+      setIsVerifying('');
     },
   });
 
@@ -44,6 +58,13 @@ const Accounts = () => {
       return;
     }
     createMutation.mutate(formData);
+  };
+
+  const handleVerifyAccount = (username: string) => {
+    if (confirm(`Verify login for @${username}? This will refresh the session and may take a moment.`)) {
+      setIsVerifying(username);
+      verifyMutation.mutate(username);
+    }
   };
 
   const handleProxyClick = (username: string) => {
@@ -207,13 +228,28 @@ const Accounts = () => {
                   </div>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  <button
-                    onClick={() => handleProxyClick(account.username)}
-                    className="text-blue-600 hover:text-blue-800 flex items-center space-x-1"
-                  >
-                    <Settings className="w-4 h-4" />
-                    <span>Proxy</span>
-                  </button>
+                  <div className="flex items-center space-x-2">
+                    <button
+                      onClick={() => handleVerifyAccount(account.username)}
+                      disabled={isVerifying === account.username || verifyMutation.isPending}
+                      className="text-green-600 hover:text-green-800 flex items-center space-x-1 disabled:opacity-50"
+                      title="Verify login and refresh session"
+                    >
+                      {isVerifying === account.username ? (
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Shield className="w-4 h-4" />
+                      )}
+                      <span>{isVerifying === account.username ? 'Verifying...' : 'Verify'}</span>
+                    </button>
+                    <button
+                      onClick={() => handleProxyClick(account.username)}
+                      className="text-blue-600 hover:text-blue-800 flex items-center space-x-1"
+                    >
+                      <Settings className="w-4 h-4" />
+                      <span>Proxy</span>
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}
@@ -299,6 +335,17 @@ const Accounts = () => {
                 />
               </div>
 
+              {/* Verification Notice */}
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                <div className="flex items-center space-x-2">
+                  <Shield className="w-4 h-4 text-blue-600" />
+                  <span className="text-sm font-medium text-blue-800">Account Verification</span>
+                </div>
+                <p className="text-xs text-blue-700 mt-1">
+                  Your Instagram credentials will be verified during account creation to ensure they work correctly and create a session file.
+                </p>
+              </div>
+
               <div className="flex justify-end space-x-3 pt-4">
                 <button
                   type="button"
@@ -310,9 +357,19 @@ const Accounts = () => {
                 <button
                   type="submit"
                   disabled={createMutation.isPending}
-                  className="px-4 py-2 bg-pink-600 text-white rounded-md hover:bg-pink-700 disabled:opacity-50"
+                  className="px-4 py-2 bg-pink-600 text-white rounded-md hover:bg-pink-700 disabled:opacity-50 flex items-center"
                 >
-                  {createMutation.isPending ? 'Creating...' : 'Create Account'}
+                  {createMutation.isPending ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                      Verifying...
+                    </>
+                  ) : (
+                    <>
+                      <Shield className="w-4 h-4 mr-2" />
+                      Create & Verify Account
+                    </>
+                  )}
                 </button>
               </div>
             </form>

@@ -42,8 +42,13 @@ export const accountsApi = {
     return response.data;
   },
 
-  create: async (account: AccountCreate): Promise<{ message: string }> => {
+  create: async (account: AccountCreate): Promise<{ message: string; verified: boolean; session_created: boolean }> => {
     const response = await api.post('/accounts', account);
+    return response.data;
+  },
+
+  verify: async (username: string): Promise<{ message: string; verified: boolean; session_refreshed: boolean; status: string }> => {
+    const response = await api.post(`/accounts/${username}/verify`);
     return response.data;
   },
 

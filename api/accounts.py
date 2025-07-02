@@ -5,6 +5,7 @@ import requests
 import time
 from api.models import AccountCreate, ProxySettings, ProxyTestResult
 from modules.database import get_database_connection
+from modules.uploader import test_instagram_connection, cleanup_session
 from services.proxy_monitoring_service import ProxyMonitoringService
 
 router = APIRouter()
@@ -86,7 +87,7 @@ async def get_accounts():
 
 @router.post("/")
 async def create_account(account: AccountCreate):
-    """Add new Instagram account"""
+    """Add new Instagram account with login verification"""
     try:
         with get_database_connection() as conn:
             cursor = conn.cursor()
@@ -98,21 +99,128 @@ async def create_account(account: AccountCreate):
             if existing:
                 raise HTTPException(status_code=400, detail="Account already exists")
 
-            # Insert new account
+            # First, test Instagram connection to verify credentials
+            print(f"🧪 Testing Instagram login for @{account.username}")
+
+            # Test connection and create session
+            login_success = test_instagram_connection(
+                username=account.username,
+                password=account.password,
+                two_fa_key=account.two_fa_key
+            )
+
+            if not login_success:
+                print(f"❌ Login verification failed for @{account.username}")
+                raise HTTPException(
+                    status_code=400,
+                    detail="Failed to verify Instagram credentials. Please check username, password, and 2FA key."
+                )
+
+            print(f"✅ Login verification successful for @{account.username}")
+
+            # Insert new account with verified status
             cursor.execute('''
-                           INSERT INTO accounts (username, password, theme, "2FAKey", status, active, posts_count)
-                           VALUES (%s, %s, %s, %s, 'active', TRUE, 0)
+                           INSERT INTO accounts (username, password, theme, "2FAKey", status, active, posts_count,
+                                                 last_login)
+                           VALUES (%s, %s, %s, %s, 'active', TRUE, 0, CURRENT_TIMESTAMP)
                            ''', (account.username, account.password, account.theme, account.two_fa_key))
 
             conn.commit()
 
-        return {"message": f"Account {account.username} created successfully"}
+        return {
+            "message": f"Account {account.username} created and verified successfully",
+            "verified": True,
+            "session_created": True
+        }
+
+    except HTTPException:
+        # Clean up any created session files on error
+        try:
+            cleanup_session(account.username)
+        except:
+            pass
+        raise
+    except Exception as e:
+        # Clean up any created session files on error
+        try:
+            cleanup_session(account.username)
+        except:
+            pass
+        print(f"Error creating account: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to create account: {str(e)}")
+
+
+@router.post("/{username}/verify")
+async def verify_account(username: str):
+    """Verify existing account login and refresh session"""
+    try:
+        with get_database_connection() as conn:
+            cursor = conn.cursor()
+
+            # Get account details
+            cursor.execute(
+                'SELECT username, password, "2FAKey" FROM accounts WHERE username = %s',
+                (username,)
+            )
+            account_data = cursor.fetchone()
+
+            if not account_data:
+                raise HTTPException(status_code=404, detail="Account not found")
+
+            account_username, password, two_fa_key = account_data
+
+            print(f"🧪 Verifying Instagram login for @{username}")
+
+            # Clean up existing session first
+            cleanup_session(username)
+
+            # Test connection and create fresh session
+            login_success = test_instagram_connection(
+                username=account_username,
+                password=password,
+                two_fa_key=two_fa_key
+            )
+
+            if not login_success:
+                print(f"❌ Login verification failed for @{username}")
+
+                # Update account status to error
+                cursor.execute('''
+                               UPDATE accounts
+                               SET status     = 'error',
+                                   last_login = NULL
+                               WHERE username = %s
+                               ''', (username,))
+                conn.commit()
+
+                raise HTTPException(
+                    status_code=400,
+                    detail="Failed to verify Instagram credentials. Please check account status."
+                )
+
+            print(f"✅ Login verification successful for @{username}")
+
+            # Update account status and last login
+            cursor.execute('''
+                           UPDATE accounts
+                           SET status     = 'active',
+                               last_login = CURRENT_TIMESTAMP
+                           WHERE username = %s
+                           ''', (username,))
+            conn.commit()
+
+        return {
+            "message": f"Account @{username} verified successfully",
+            "verified": True,
+            "session_refreshed": True,
+            "status": "active"
+        }
 
     except HTTPException:
         raise
     except Exception as e:
-        print(f"Error creating account: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to create account: {str(e)}")
+        print(f"Error verifying account: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to verify account: {str(e)}")
 
 
 @router.put("/{username}/proxy")
