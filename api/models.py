@@ -43,7 +43,7 @@ class ProxyUpdate(BaseModel):
     proxy_password: Optional[str] = None
     proxy_active: Optional[bool] = None
 
-# Video models - ИСПРАВЛЕНО для datetime
+# Video models - FIXED for datetime validation
 class Video(BaseModel):
     link: str
     theme: str
@@ -60,7 +60,6 @@ class Video(BaseModel):
             return v.isoformat()
         if isinstance(v, str):
             return v
-        # Try to convert other types to datetime first
         try:
             if hasattr(v, 'isoformat'):
                 return v.isoformat()
@@ -105,7 +104,7 @@ class TikTokSourceUpdate(BaseModel):
     tiktok_username: Optional[str] = None
     active: Optional[bool] = None
 
-# Task models - ИСПРАВЛЕНО для datetime
+# Task models - FIXED for datetime validation
 class FetchRequest(BaseModel):
     theme: str
     source_usernames: List[str]
