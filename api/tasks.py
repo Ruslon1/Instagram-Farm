@@ -27,7 +27,7 @@ def safe_datetime_to_string(dt_value):
             return dt_value.isoformat()
         return str(dt_value)
     except Exception:
-        return datetime.now().isoformat() if dt_value else None
+        return None
 
 
 @router.post("/fetch")
@@ -203,11 +203,11 @@ async def get_tasks(status: Optional[str] = None, limit: int = 50):
             tasks = []
             rows = cursor.fetchall()
 
-            print(f"🔍 Fetched {len(rows)} task rows from database")
+            print(f"✅ Fetched {len(rows)} task rows from database")
 
             for i, row in enumerate(rows):
                 try:
-                    # Безопасное извлечение данных
+                    # Безопасное извлечение данных с конвертацией datetime
                     task_dict = {
                         "id": row[0] if len(row) > 0 else "",
                         "task_type": row[1] if len(row) > 1 else "",
@@ -223,24 +223,18 @@ async def get_tasks(status: Optional[str] = None, limit: int = 50):
                     }
 
                     tasks.append(task_dict)
-                    print(f"✅ Added task {i}: {task_dict['id']}")
 
                 except Exception as row_error:
                     print(f"❌ Error processing task row {i}: {row_error}")
-                    print(f"Raw row data: {row}")
                     continue
 
             print(f"✅ Successfully processed {len(tasks)} tasks")
-
-            # Возвращаем обычный JSON ответ вместо Pydantic модели
             return JSONResponse(content=tasks)
 
     except Exception as e:
         print(f"❌ Error in get_tasks: {e}")
         import traceback
         traceback.print_exc()
-
-        # Возвращаем пустой список вместо ошибки
         return JSONResponse(content=[])
 
 

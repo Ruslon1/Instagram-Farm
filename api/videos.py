@@ -10,7 +10,7 @@ router = APIRouter()
 def safe_datetime_to_string(dt_value):
     """Safely convert datetime to string"""
     if dt_value is None:
-        return datetime.now().isoformat()
+        return None
     if isinstance(dt_value, datetime):
         return dt_value.isoformat()
     if isinstance(dt_value, str):
@@ -20,7 +20,7 @@ def safe_datetime_to_string(dt_value):
             return dt_value.isoformat()
         return str(dt_value)
     except Exception:
-        return datetime.now().isoformat()
+        return None
 
 
 @router.get("/")
@@ -51,7 +51,7 @@ async def get_videos(theme: Optional[str] = None, limit: int = 100):
             videos = []
             rows = cursor.fetchall()
 
-            print(f"🔍 Fetched {len(rows)} rows from database")
+            print(f"✅ Fetched {len(rows)} video rows from database")
 
             if rows:
                 for i, row in enumerate(rows):
@@ -62,9 +62,7 @@ async def get_videos(theme: Optional[str] = None, limit: int = 100):
                         status = row[2] if len(row) > 2 and row[2] else "pending"
                         created_at = row[3] if len(row) > 3 else None
 
-                        print(f"Row {i}: created_at = {created_at} (type: {type(created_at)})")
-
-                        # Безопасное преобразование datetime в строку
+                        # Преобразование datetime в строку
                         created_at_str = safe_datetime_to_string(created_at)
 
                         # Проверяем валидность данных
@@ -73,27 +71,21 @@ async def get_videos(theme: Optional[str] = None, limit: int = 100):
                                 "link": link,
                                 "theme": theme_val,
                                 "status": status,
-                                "created_at": created_at_str
+                                "created_at": created_at_str or datetime.now().isoformat()
                             }
                             videos.append(video_dict)
-                            print(f"✅ Added video {i}: {link[:50]}...")
 
                     except Exception as row_error:
                         print(f"❌ Error processing video row {i}: {row_error}")
-                        print(f"Raw row data: {row}")
                         continue
 
             print(f"✅ Successfully processed {len(videos)} videos")
-
-            # Возвращаем обычный JSON ответ вместо Pydantic модели
             return JSONResponse(content=videos)
 
     except Exception as e:
         print(f"❌ Error in get_videos: {e}")
         import traceback
         traceback.print_exc()
-
-        # Возвращаем пустой список вместо ошибки
         return JSONResponse(content=[])
 
 
@@ -104,12 +96,10 @@ async def delete_video(video_link: str):
         with get_database_connection() as conn:
             cursor = conn.cursor()
 
-            # Check if video exists
             cursor.execute("SELECT link FROM videos WHERE link = %s", (video_link,))
             if not cursor.fetchone():
                 raise HTTPException(status_code=404, detail="Video not found")
 
-            # Delete the video
             cursor.execute("DELETE FROM videos WHERE link = %s", (video_link,))
             conn.commit()
 
