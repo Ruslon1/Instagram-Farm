@@ -1,17 +1,18 @@
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import JSONResponse
 from typing import List
 import requests
 import time
-from api.models import Account, AccountCreate, ProxySettings, ProxyTestResult, ProxyUpdate
+from api.models import AccountCreate, ProxySettings, ProxyTestResult
 from modules.database import get_database_connection
 from services.proxy_monitoring_service import ProxyMonitoringService
 
 router = APIRouter()
 
 
-@router.get("/", response_model=List[Account])
+@router.get("/")
 async def get_accounts():
-    """Get all Instagram accounts with proxy info"""
+    """Get all Instagram accounts with proxy info - returns JSON directly"""
     try:
         with get_database_connection() as conn:
             cursor = conn.cursor()
@@ -49,23 +50,32 @@ async def get_accounts():
                         proxy_status = row[7] if len(row) > 7 else "unchecked"
                         proxy_active = row[8] if len(row) > 8 else False
 
-                        accounts.append(Account(
-                            username=username,
-                            theme=theme,
-                            status=status,
-                            posts_count=int(posts_count) if posts_count else 0,
-                            last_login=last_login,
-                            proxy_host=proxy_host,
-                            proxy_port=proxy_port,
-                            proxy_status=proxy_status,
-                            proxy_active=bool(proxy_active)
-                        ))
+                        # Convert last_login to string if it's a datetime
+                        last_login_str = None
+                        if last_login:
+                            if hasattr(last_login, 'isoformat'):
+                                last_login_str = last_login.isoformat()
+                            else:
+                                last_login_str = str(last_login)
+
+                        account_dict = {
+                            "username": username,
+                            "theme": theme,
+                            "status": status,
+                            "posts_count": int(posts_count) if posts_count else 0,
+                            "last_login": last_login_str,
+                            "proxy_host": proxy_host,
+                            "proxy_port": proxy_port,
+                            "proxy_status": proxy_status,
+                            "proxy_active": bool(proxy_active)
+                        }
+                        accounts.append(account_dict)
                     except Exception as row_error:
                         print(f"Error processing row {row}: {row_error}")
                         continue
 
             print(f"Successfully fetched {len(accounts)} accounts")
-            return accounts
+            return JSONResponse(content=accounts)
 
     except Exception as e:
         print(f"Error in get_accounts: {e}")
@@ -191,7 +201,7 @@ async def remove_account_proxy(username: str):
         raise HTTPException(status_code=500, detail=f"Failed to remove proxy settings: {str(e)}")
 
 
-@router.post("/{username}/proxy/test", response_model=ProxyTestResult)
+@router.post("/{username}/proxy/test")
 async def test_account_proxy(username: str):
     """Test proxy settings for account"""
     try:
@@ -215,7 +225,7 @@ async def test_account_proxy(username: str):
             result = await test_proxy_connection(proxy_host, proxy_port, proxy_username, proxy_password, proxy_type)
 
             # Update proxy status in database
-            new_status = "working" if result.success else "failed"
+            new_status = "working" if result["success"] else "failed"
             cursor.execute('''
                            UPDATE accounts
                            SET proxy_status     = %s,
@@ -262,6 +272,11 @@ async def get_account_proxy(username: str):
                     "proxy_active": False
                 }
 
+            # Convert datetime to string if needed
+            proxy_last_check = proxy_data[6]
+            if proxy_last_check and hasattr(proxy_last_check, 'isoformat'):
+                proxy_last_check = proxy_last_check.isoformat()
+
             return {
                 "proxy_configured": True,
                 "proxy_host": proxy_data[0],
@@ -270,7 +285,7 @@ async def get_account_proxy(username: str):
                 "proxy_type": proxy_data[3],
                 "proxy_active": bool(proxy_data[4]) if proxy_data[4] is not None else False,
                 "proxy_status": proxy_data[5],
-                "proxy_last_check": proxy_data[6]
+                "proxy_last_check": proxy_last_check
             }
 
     except HTTPException:
@@ -313,7 +328,7 @@ async def get_proxy_statistics():
 
 
 async def test_proxy_connection(host: str, port: int, username: str = None, password: str = None,
-                                proxy_type: str = "HTTP") -> ProxyTestResult:
+                                proxy_type: str = "HTTP") -> dict:
     """Test proxy connection by making request to external service"""
     try:
         # Normalize proxy type
@@ -373,12 +388,12 @@ async def test_proxy_connection(host: str, port: int, username: str = None, pass
 
                     print(f"✅ Proxy test successful: {response_time:.2f}s, IP: {external_ip}")
 
-                    return ProxyTestResult(
-                        success=True,
-                        message=f"Proxy is working correctly (via {test_url})",
-                        response_time=round(response_time, 2),
-                        external_ip=external_ip
-                    )
+                    return {
+                        "success": True,
+                        "message": f"Proxy is working correctly (via {test_url})",
+                        "response_time": round(response_time, 2),
+                        "external_ip": external_ip
+                    }
                 else:
                     print(f"❌ Status {response.status_code} from {test_url}")
 
@@ -396,14 +411,14 @@ async def test_proxy_connection(host: str, port: int, username: str = None, pass
                 continue
 
         # All URLs failed
-        return ProxyTestResult(
-            success=False,
-            message="All test URLs failed - proxy may be down or misconfigured"
-        )
+        return {
+            "success": False,
+            "message": "All test URLs failed - proxy may be down or misconfigured"
+        }
 
     except Exception as e:
         print(f"❌ Proxy test exception: {e}")
-        return ProxyTestResult(
-            success=False,
-            message=f"Proxy test failed: {str(e)}"
-        )
+        return {
+            "success": False,
+            "message": f"Proxy test failed: {str(e)}"
+        }

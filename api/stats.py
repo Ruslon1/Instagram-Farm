@@ -1,13 +1,12 @@
 from fastapi import APIRouter, HTTPException
-from api.models import StatsResponse
 from modules.database import get_database_connection
 
 router = APIRouter()
 
 
-@router.get("/", response_model=StatsResponse)
+@router.get("/")
 async def get_stats():
-    """Get dashboard statistics with proper error handling"""
+    """Get dashboard statistics with proper error handling - returns JSON directly"""
 
     # Default values
     stats = {
@@ -55,12 +54,11 @@ async def get_stats():
             stats["running_tasks"] = 0
 
             print(f"Final stats: {stats}")
-
-            return StatsResponse(**stats)
+            return stats
 
     except Exception as e:
         print(f"Stats error: {e}")
         import traceback
         traceback.print_exc()
         # Return default stats instead of raising error
-        return StatsResponse(**stats)
+        return stats

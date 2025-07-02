@@ -1,7 +1,8 @@
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import JSONResponse
 from typing import List, Optional
 from datetime import datetime
-from api.models import TikTokSource, TikTokSourceCreate, TikTokSourceUpdate
+from api.models import TikTokSourceCreate, TikTokSourceUpdate
 from modules.database import get_database_connection
 
 router = APIRouter()
@@ -11,14 +12,21 @@ def convert_datetime_to_string(dt_value):
     """Convert datetime to ISO string safely"""
     if dt_value is None:
         return None
-    if hasattr(dt_value, 'isoformat'):
+    if isinstance(dt_value, datetime):
         return dt_value.isoformat()
-    return str(dt_value)
+    if isinstance(dt_value, str):
+        return dt_value
+    try:
+        if hasattr(dt_value, 'isoformat'):
+            return dt_value.isoformat()
+        return str(dt_value)
+    except Exception:
+        return None
 
 
-@router.get("/", response_model=List[TikTokSource])
+@router.get("/")
 async def get_tiktok_sources(theme: Optional[str] = None, active_only: bool = True):
-    """Get all TikTok sources with optional filtering"""
+    """Get all TikTok sources with optional filtering - returns JSON directly"""
     try:
         with get_database_connection() as conn:
             cursor = conn.cursor()
@@ -39,23 +47,29 @@ async def get_tiktok_sources(theme: Optional[str] = None, active_only: bool = Tr
 
             sources = []
             for row in cursor.fetchall():
-                sources.append(TikTokSource(
-                    id=row[0],
-                    theme=row[1],
-                    tiktok_username=row[2],
-                    active=bool(row[3]),
-                    last_fetch=convert_datetime_to_string(row[4]),
-                    videos_count=row[5] or 0,
-                    created_at=convert_datetime_to_string(row[6])
-                ))
+                try:
+                    source_dict = {
+                        "id": row[0],
+                        "theme": row[1],
+                        "tiktok_username": row[2],
+                        "active": bool(row[3]),
+                        "last_fetch": convert_datetime_to_string(row[4]),
+                        "videos_count": row[5] or 0,
+                        "created_at": convert_datetime_to_string(row[6])
+                    }
+                    sources.append(source_dict)
+                except Exception as row_error:
+                    print(f"Error processing TikTok source row: {row_error}")
+                    continue
 
-            return sources
+            return JSONResponse(content=sources)
 
     except Exception as e:
+        print(f"Error fetching TikTok sources: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to fetch TikTok sources: {str(e)}")
 
 
-@router.post("/", response_model=TikTokSource)
+@router.post("/")
 async def create_tiktok_source(source: TikTokSourceCreate):
     """Add new TikTok source"""
     try:
@@ -88,23 +102,26 @@ async def create_tiktok_source(source: TikTokSourceCreate):
             )
             row = cursor.fetchone()
 
-            return TikTokSource(
-                id=row[0],
-                theme=row[1],
-                tiktok_username=row[2],
-                active=bool(row[3]),
-                last_fetch=convert_datetime_to_string(row[4]),
-                videos_count=row[5] or 0,
-                created_at=convert_datetime_to_string(row[6])
-            )
+            result = {
+                "id": row[0],
+                "theme": row[1],
+                "tiktok_username": row[2],
+                "active": bool(row[3]),
+                "last_fetch": convert_datetime_to_string(row[4]),
+                "videos_count": row[5] or 0,
+                "created_at": convert_datetime_to_string(row[6])
+            }
+
+            return result
 
     except HTTPException:
         raise
     except Exception as e:
+        print(f"Error creating TikTok source: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to create TikTok source: {str(e)}")
 
 
-@router.put("/{source_id}", response_model=TikTokSource)
+@router.put("/{source_id}")
 async def update_tiktok_source(source_id: int, source: TikTokSourceUpdate):
     """Update TikTok source"""
     try:
@@ -145,19 +162,22 @@ async def update_tiktok_source(source_id: int, source: TikTokSourceUpdate):
             )
             row = cursor.fetchone()
 
-            return TikTokSource(
-                id=row[0],
-                theme=row[1],
-                tiktok_username=row[2],
-                active=bool(row[3]),
-                last_fetch=convert_datetime_to_string(row[4]),
-                videos_count=row[5] or 0,
-                created_at=convert_datetime_to_string(row[6])
-            )
+            result = {
+                "id": row[0],
+                "theme": row[1],
+                "tiktok_username": row[2],
+                "active": bool(row[3]),
+                "last_fetch": convert_datetime_to_string(row[4]),
+                "videos_count": row[5] or 0,
+                "created_at": convert_datetime_to_string(row[6])
+            }
+
+            return result
 
     except HTTPException:
         raise
     except Exception as e:
+        print(f"Error updating TikTok source: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to update TikTok source: {str(e)}")
 
 
@@ -227,17 +247,22 @@ async def get_sources_by_theme(theme: str):
 
             sources = []
             for row in cursor.fetchall():
-                sources.append(TikTokSource(
-                    id=row[0],
-                    theme=row[1],
-                    tiktok_username=row[2],
-                    active=bool(row[3]),
-                    last_fetch=convert_datetime_to_string(row[4]),
-                    videos_count=row[5] or 0,
-                    created_at=convert_datetime_to_string(row[6])
-                ))
+                try:
+                    source_dict = {
+                        "id": row[0],
+                        "theme": row[1],
+                        "tiktok_username": row[2],
+                        "active": bool(row[3]),
+                        "last_fetch": convert_datetime_to_string(row[4]),
+                        "videos_count": row[5] or 0,
+                        "created_at": convert_datetime_to_string(row[6])
+                    }
+                    sources.append(source_dict)
+                except Exception as row_error:
+                    print(f"Error processing TikTok source row: {row_error}")
+                    continue
 
-            return sources
+            return JSONResponse(content=sources)
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to get sources for theme: {str(e)}")

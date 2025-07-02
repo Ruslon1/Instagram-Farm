@@ -107,7 +107,6 @@ async def detailed_health_check():
 
     # Check database connection
     try:
-        # This is a simple check - will be improved when we migrate to PostgreSQL
         from modules.database import get_database_connection
         with get_database_connection() as conn:
             cursor = conn.cursor()
@@ -149,7 +148,7 @@ async def detailed_health_check():
     return JSONResponse(content=health_status, status_code=status_code)
 
 
-# Include API routers
+# Include API routers - БЕЗ response_model параметров
 app.include_router(accounts_router, prefix="/api/accounts", tags=["accounts"])
 app.include_router(videos_router, prefix="/api/videos", tags=["videos"])
 app.include_router(tasks_router, prefix="/api/tasks", tags=["tasks"])
@@ -190,15 +189,16 @@ async def global_exception_handler(request: Request, exc: Exception):
         )
 
 
-# Initialize on startup
-@app.on_event("startup")
-async def startup():
-    """Initialize application on startup."""
+# Initialize on startup - ИСПРАВЛЕНО: используем lifespan вместо on_event
+from contextlib import asynccontextmanager
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup
     logger.info("Starting Instagram Bot API", version=settings.app_version, environment=settings.environment)
 
     try:
         # Initialize database
-        from modules.database import init_database
         init_database()
         logger.info("Database initialized successfully")
 
@@ -224,11 +224,13 @@ async def startup():
         logger.error("Failed to start application", error=str(e), exc_info=True)
         raise
 
+    yield  # Приложение запущено
 
-@app.on_event("shutdown")
-async def shutdown():
-    """Cleanup on shutdown."""
+    # Shutdown
     logger.info("Shutting down Instagram Bot API")
+
+# Применяем lifespan к приложению
+app.router.lifespan_context = lifespan
 
 
 @app.get("/")
