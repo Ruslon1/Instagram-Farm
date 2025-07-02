@@ -1,5 +1,5 @@
-from pydantic import BaseModel
-from typing import List, Optional
+from pydantic import BaseModel, field_validator
+from typing import List, Optional, Union
 from datetime import datetime
 
 # Account models
@@ -43,12 +43,30 @@ class ProxyUpdate(BaseModel):
     proxy_password: Optional[str] = None
     proxy_active: Optional[bool] = None
 
-# Video models
+# Video models - ИСПРАВЛЕНО для datetime
 class Video(BaseModel):
     link: str
     theme: str
     status: str = "pending"
     created_at: Optional[str] = None
+
+    @field_validator('created_at', mode='before')
+    @classmethod
+    def validate_created_at(cls, v):
+        """Convert datetime objects to ISO string"""
+        if v is None:
+            return datetime.now().isoformat()
+        if isinstance(v, datetime):
+            return v.isoformat()
+        if isinstance(v, str):
+            return v
+        # Try to convert other types to datetime first
+        try:
+            if hasattr(v, 'isoformat'):
+                return v.isoformat()
+            return str(v)
+        except Exception:
+            return datetime.now().isoformat()
 
 # TikTok Source models
 class TikTokSource(BaseModel):
@@ -60,6 +78,23 @@ class TikTokSource(BaseModel):
     videos_count: int = 0
     created_at: str
 
+    @field_validator('last_fetch', 'created_at', mode='before')
+    @classmethod
+    def validate_datetime_fields(cls, v):
+        """Convert datetime objects to ISO string"""
+        if v is None:
+            return None
+        if isinstance(v, datetime):
+            return v.isoformat()
+        if isinstance(v, str):
+            return v
+        try:
+            if hasattr(v, 'isoformat'):
+                return v.isoformat()
+            return str(v)
+        except Exception:
+            return None
+
 class TikTokSourceCreate(BaseModel):
     theme: str
     tiktok_username: str
@@ -70,7 +105,7 @@ class TikTokSourceUpdate(BaseModel):
     tiktok_username: Optional[str] = None
     active: Optional[bool] = None
 
-# Task models
+# Task models - ИСПРАВЛЕНО для datetime
 class FetchRequest(BaseModel):
     theme: str
     source_usernames: List[str]
@@ -92,6 +127,23 @@ class TaskLog(BaseModel):
     current_item: Optional[str] = None
     next_action_at: Optional[str] = None
     cooldown_seconds: Optional[int] = None
+
+    @field_validator('created_at', 'next_action_at', mode='before')
+    @classmethod
+    def validate_datetime_fields(cls, v):
+        """Convert datetime objects to ISO string"""
+        if v is None:
+            return None
+        if isinstance(v, datetime):
+            return v.isoformat()
+        if isinstance(v, str):
+            return v
+        try:
+            if hasattr(v, 'isoformat'):
+                return v.isoformat()
+            return str(v)
+        except Exception:
+            return datetime.now().isoformat() if v else None
 
 # Response models
 class StatsResponse(BaseModel):
