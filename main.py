@@ -1,7 +1,6 @@
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from contextlib import asynccontextmanager
 import time
 import uuid
 
@@ -24,54 +23,14 @@ from modules.database import init_database
 setup_logging()
 logger = get_logger("main")
 
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    # Startup
-    logger.info("Starting Instagram Bot API", version=settings.app_version, environment=settings.environment)
-
-    try:
-        # Initialize database
-        init_database()
-        logger.info("Database initialized successfully")
-
-        # Create required directories
-        import os
-        for directory in [settings.videos_dir, settings.sessions_dir, settings.logs_dir]:
-            os.makedirs(directory, exist_ok=True)
-        logger.info("Required directories created")
-
-        # Log configuration
-        logger.info(
-            "Application configuration",
-            database_url=settings.database_url.split("@")[
-                -1] if "@" in settings.database_url else settings.database_url,
-            redis_url=settings.redis_url.split("@")[-1] if "@" in settings.redis_url else settings.redis_url,
-            allowed_origins=settings.get_allowed_origins(),
-            debug=settings.debug
-        )
-
-        logger.info("Instagram Bot API started successfully")
-
-    except Exception as e:
-        logger.error("Failed to start application", error=str(e), exc_info=True)
-        raise
-
-    yield  # Приложение запущено
-
-    # Shutdown
-    logger.info("Shutting down Instagram Bot API")
-
-
-# Initialize FastAPI with lifespan
+# Initialize FastAPI
 app = FastAPI(
     title=settings.app_name,
     description="Production-ready Instagram Bot with Proxy Support",
     version=settings.app_version,
     debug=settings.debug,
     docs_url="/docs" if settings.is_development() else None,
-    redoc_url="/redoc" if settings.is_development() else None,
-    lifespan=lifespan
+    redoc_url="/redoc" if settings.is_development() else None
 )
 
 # Security headers
@@ -189,7 +148,7 @@ async def detailed_health_check():
     return JSONResponse(content=health_status, status_code=status_code)
 
 
-# Include API routers
+# Include API routers - БЕЗ response_model параметров
 app.include_router(accounts_router, prefix="/api/accounts", tags=["accounts"])
 app.include_router(videos_router, prefix="/api/videos", tags=["videos"])
 app.include_router(tasks_router, prefix="/api/tasks", tags=["tasks"])
@@ -228,6 +187,50 @@ async def global_exception_handler(request: Request, exc: Exception):
                 "message": "An unexpected error occurred"
             }
         )
+
+
+# Initialize on startup - ИСПРАВЛЕНО: используем lifespan вместо on_event
+from contextlib import asynccontextmanager
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup
+    logger.info("Starting Instagram Bot API", version=settings.app_version, environment=settings.environment)
+
+    try:
+        # Initialize database
+        init_database()
+        logger.info("Database initialized successfully")
+
+        # Create required directories
+        import os
+        for directory in [settings.videos_dir, settings.sessions_dir, settings.logs_dir]:
+            os.makedirs(directory, exist_ok=True)
+        logger.info("Required directories created")
+
+        # Log configuration
+        logger.info(
+            "Application configuration",
+            database_url=settings.database_url.split("@")[
+                -1] if "@" in settings.database_url else settings.database_url,
+            redis_url=settings.redis_url.split("@")[-1] if "@" in settings.redis_url else settings.redis_url,
+            allowed_origins=settings.get_allowed_origins(),
+            debug=settings.debug
+        )
+
+        logger.info("Instagram Bot API started successfully")
+
+    except Exception as e:
+        logger.error("Failed to start application", error=str(e), exc_info=True)
+        raise
+
+    yield  # Приложение запущено
+
+    # Shutdown
+    logger.info("Shutting down Instagram Bot API")
+
+# Применяем lifespan к приложению
+app.router.lifespan_context = lifespan
 
 
 @app.get("/")

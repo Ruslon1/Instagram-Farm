@@ -1,12 +1,9 @@
-import os
-import sys
 from celery import Celery
 from celery.signals import worker_shutting_down
-
-# Добавляем текущую директорию в PYTHONPATH
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-
 from config.settings import settings
+import os
+import sys
+
 
 app = Celery(
     "instagram_bot",
@@ -15,22 +12,15 @@ app = Celery(
 )
 
 app.conf.update(
-    worker_pool='solo',  # Изменено с 'gevent' на 'solo' для Docker
-    worker_concurrency=1,
+    worker_pool='gevent',
+    worker_concurrency=4,
     task_serializer='json',
     result_serializer='json',
     accept_content=['json'],
     timezone='UTC',
     enable_utc=True,
     task_acks_late=False,
-    broker_connection_retry_on_startup=True,
-    # Добавляем настройки для импорта
-    include=['modules.tasks'],
-    imports=['modules.tasks']
+    broker_connection_retry_on_startup=True
 )
 
-# Автоматическое обнаружение задач
-app.autodiscover_tasks(['modules'])
-
-if __name__ == '__main__':
-    app.start()
+app.autodiscover_tasks(['modules.tasks'])
