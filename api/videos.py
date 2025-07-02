@@ -1,83 +1,100 @@
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import JSONResponse
 from typing import List, Optional
 from datetime import datetime
-from api.models import Video
 from modules.database import get_database_connection
 
 router = APIRouter()
 
 
-@router.get("/", response_model=List[Video])
+def safe_datetime_to_string(dt_value):
+    """Safely convert datetime to string"""
+    if dt_value is None:
+        return datetime.now().isoformat()
+    if isinstance(dt_value, datetime):
+        return dt_value.isoformat()
+    if isinstance(dt_value, str):
+        return dt_value
+    try:
+        if hasattr(dt_value, 'isoformat'):
+            return dt_value.isoformat()
+        return str(dt_value)
+    except Exception:
+        return datetime.now().isoformat()
+
+
+@router.get("/")
 async def get_videos(theme: Optional[str] = None, limit: int = 100):
-    """Get videos with optional theme filter - FIXED VERSION"""
+    """Get videos - returning plain JSON to avoid Pydantic validation"""
     try:
         with get_database_connection() as conn:
             cursor = conn.cursor()
 
-            # Исправляем параметры для PostgreSQL
             if theme:
                 cursor.execute('''
-                               SELECT link,
-                                      theme,
-                                      COALESCE(status, 'pending') as status,
-                                      created_at
-                               FROM videos
-                               WHERE theme = %s
-                               ORDER BY created_at DESC LIMIT %s
-                               ''', (theme, limit))
+                    SELECT link,theme,
+                           COALESCE(status, 'pending') as status,
+                           created_at
+                    FROM videos
+                    WHERE theme = %s
+                    ORDER BY created_at DESC LIMIT %s
+                ''', (theme, limit))
             else:
                 cursor.execute('''
-                               SELECT link,
-                                      theme,
-                                      COALESCE(status, 'pending') as status,
-                                      created_at
-                               FROM videos
-                               ORDER BY created_at DESC LIMIT %s
-                               ''', (limit,))
+                    SELECT link,theme,
+                           COALESCE(status, 'pending') as status,
+                           created_at
+                    FROM videos
+                    ORDER BY created_at DESC LIMIT %s
+                ''', (limit,))
 
             videos = []
             rows = cursor.fetchall()
 
+            print(f"🔍 Fetched {len(rows)} rows from database")
+
             if rows:
-                for row in rows:
+                for i, row in enumerate(rows):
                     try:
                         # Безопасное извлечение данных
                         link = row[0] if len(row) > 0 and row[0] else ""
                         theme_val = row[1] if len(row) > 1 and row[1] else "unknown"
                         status = row[2] if len(row) > 2 and row[2] else "pending"
-                        created_at = row[3] if len(row) > 3 and row[3] else None
+                        created_at = row[3] if len(row) > 3 else None
 
-                        # Обработка даты
-                        if created_at:
-                            if hasattr(created_at, 'isoformat'):
-                                created_at_str = created_at.isoformat()
-                            else:
-                                created_at_str = str(created_at)
-                        else:
-                            created_at_str = datetime.now().isoformat()
+                        print(f"Row {i}: created_at = {created_at} (type: {type(created_at)})")
+
+                        # Безопасное преобразование datetime в строку
+                        created_at_str = safe_datetime_to_string(created_at)
 
                         # Проверяем валидность данных
                         if link and theme_val:
-                            videos.append(Video(
-                                link=link,
-                                theme=theme_val,
-                                status=status,
-                                created_at=created_at_str
-                            ))
+                            video_dict = {
+                                "link": link,
+                                "theme": theme_val,
+                                "status": status,
+                                "created_at": created_at_str
+                            }
+                            videos.append(video_dict)
+                            print(f"✅ Added video {i}: {link[:50]}...")
+
                     except Exception as row_error:
-                        print(f"Error processing video row {row}: {row_error}")
+                        print(f"❌ Error processing video row {i}: {row_error}")
+                        print(f"Raw row data: {row}")
                         continue
 
-            print(f"✅ Successfully fetched {len(videos)} videos")
-            return videos
+            print(f"✅ Successfully processed {len(videos)} videos")
+
+            # Возвращаем обычный JSON ответ вместо Pydantic модели
+            return JSONResponse(content=videos)
 
     except Exception as e:
         print(f"❌ Error in get_videos: {e}")
         import traceback
         traceback.print_exc()
 
-        # Возвращаем пустой список вместо ошибки для graceful degradation
-        return []
+        # Возвращаем пустой список вместо ошибки
+        return JSONResponse(content=[])
 
 
 @router.delete("/{video_link:path}")
@@ -120,10 +137,8 @@ async def bulk_delete_videos(video_links: List[str]):
 
             for video_link in video_links:
                 try:
-                    # Check if video exists
                     cursor.execute("SELECT link FROM videos WHERE link = %s", (video_link,))
                     if cursor.fetchone():
-                        # Delete the video
                         cursor.execute("DELETE FROM videos WHERE link = %s", (video_link,))
                         deleted_count += 1
                     else:
@@ -150,19 +165,17 @@ async def bulk_delete_videos(video_links: List[str]):
 
 @router.delete("/by-theme/{theme}")
 async def delete_videos_by_theme(theme: str, status: Optional[str] = None):
-    """Delete all videos for a specific theme, optionally filtered by status"""
+    """Delete all videos for a specific theme"""
     try:
         with get_database_connection() as conn:
             cursor = conn.cursor()
 
             if status:
-                # Delete videos with specific status
                 cursor.execute(
                     "DELETE FROM videos WHERE theme = %s AND COALESCE(status, 'pending') = %s",
                     (theme, status)
                 )
             else:
-                # Delete all videos for theme
                 cursor.execute("DELETE FROM videos WHERE theme = %s", (theme,))
 
             deleted_count = cursor.rowcount
@@ -229,12 +242,10 @@ async def update_video_status(video_link: str, new_status: str):
         with get_database_connection() as conn:
             cursor = conn.cursor()
 
-            # Check if video exists
             cursor.execute("SELECT link FROM videos WHERE link = %s", (video_link,))
             if not cursor.fetchone():
                 raise HTTPException(status_code=404, detail="Video not found")
 
-            # Update video status
             cursor.execute(
                 "UPDATE videos SET status = %s WHERE link = %s",
                 (new_status, video_link)
@@ -261,14 +272,14 @@ async def get_video_stats():
         with get_database_connection() as conn:
             cursor = conn.cursor()
 
-            # Get total counts by status with safe handling
+            # Get total counts by status
             cursor.execute('''
-                           SELECT COALESCE(status, 'pending') as status,
-                                  COUNT(*) as count
-                           FROM videos
-                           GROUP BY COALESCE (status, 'pending')
-                           ORDER BY count DESC
-                           ''')
+                SELECT COALESCE(status, 'pending') as status, 
+                       COUNT(*) as count
+                FROM videos
+                GROUP BY COALESCE(status, 'pending')
+                ORDER BY count DESC
+            ''')
 
             status_stats = {}
             for row in cursor.fetchall():
@@ -277,28 +288,28 @@ async def get_video_stats():
 
             # Get total counts by theme
             cursor.execute('''
-                           SELECT theme, COUNT(*) as count
-                           FROM videos
-                           WHERE theme IS NOT NULL
-                           GROUP BY theme
-                           ORDER BY count DESC
-                           ''')
+                SELECT theme, COUNT(*) as count
+                FROM videos
+                WHERE theme IS NOT NULL
+                GROUP BY theme
+                ORDER BY count DESC
+            ''')
 
             theme_stats = {}
             for row in cursor.fetchall():
                 if len(row) >= 2 and row[0]:
                     theme_stats[row[0]] = row[1]
 
-            # Get combined stats (theme + status)
+            # Get combined stats
             cursor.execute('''
-                           SELECT theme,
-                                  COALESCE(status, 'pending') as status,
-                                  COUNT(*) as count
-                           FROM videos
-                           WHERE theme IS NOT NULL
-                           GROUP BY theme, COALESCE (status, 'pending')
-                           ORDER BY theme, status
-                           ''')
+                SELECT theme,
+                       COALESCE(status, 'pending') as status,
+                       COUNT(*) as count
+                FROM videos
+                WHERE theme IS NOT NULL
+                GROUP BY theme, COALESCE(status, 'pending')
+                ORDER BY theme, status
+            ''')
 
             combined_stats = {}
             for row in cursor.fetchall():
@@ -322,10 +333,6 @@ async def get_video_stats():
 
     except Exception as e:
         print(f"Error getting video stats: {e}")
-        import traceback
-        traceback.print_exc()
-
-        # Return basic stats even if detailed query fails
         return {
             "total_videos": 0,
             "by_status": {},

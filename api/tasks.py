@@ -1,16 +1,33 @@
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import JSONResponse
 from typing import List, Optional
 from datetime import datetime
 import os
 import uuid
 
-from api.models import FetchRequest, UploadRequest, TaskLog
+from api.models import FetchRequest, UploadRequest
 from modules.database import get_database_connection
 from modules.tasks import process_video_with_progress
 from modules.fetcher import fetch_videos_for_theme_from_accounts
 from services.task_service import TaskService
 
 router = APIRouter()
+
+
+def safe_datetime_to_string(dt_value):
+    """Safely convert datetime to string"""
+    if dt_value is None:
+        return None
+    if isinstance(dt_value, datetime):
+        return dt_value.isoformat()
+    if isinstance(dt_value, str):
+        return dt_value
+    try:
+        if hasattr(dt_value, 'isoformat'):
+            return dt_value.isoformat()
+        return str(dt_value)
+    except Exception:
+        return datetime.now().isoformat() if dt_value else None
 
 
 @router.post("/fetch")
@@ -47,7 +64,6 @@ async def fetch_videos(request: FetchRequest):
                             "INSERT INTO videos (link, theme, status) VALUES (%s, %s, 'pending') ON CONFLICT (link, theme) DO NOTHING",
                             (video_link, request.theme)
                         )
-                        # Check if row was actually inserted
                         if cursor.rowcount > 0:
                             inserted_count += 1
                     except Exception as e:
@@ -89,7 +105,7 @@ async def fetch_videos(request: FetchRequest):
 
 @router.post("/upload")
 async def upload_videos(request: UploadRequest):
-    """Trigger video upload to Instagram with detailed progress tracking"""
+    """Trigger video upload to Instagram"""
     try:
         # Get account details
         with get_database_connection() as conn:
@@ -103,7 +119,7 @@ async def upload_videos(request: UploadRequest):
             if not account_data:
                 raise HTTPException(status_code=404, detail="Account not found")
 
-        # Convert account_data to list/tuple for Celery
+        # Convert account_data to list for Celery
         account_list = [
             account_data[0],  # username
             account_data[1],  # password
@@ -118,7 +134,7 @@ async def upload_videos(request: UploadRequest):
         if not TELEGRAM_TOKEN or not TELEGRAM_CHAT_ID:
             raise HTTPException(status_code=500, detail="Telegram configuration missing")
 
-        # Start Celery task (this will handle its own logging)
+        # Start Celery task
         celery_task = process_video_with_progress.delay(
             account_list,
             request.video_links,
@@ -126,7 +142,6 @@ async def upload_videos(request: UploadRequest):
             TELEGRAM_CHAT_ID
         )
 
-        # Return Celery task ID as our task ID
         return {
             "success": True,
             "task_id": celery_task.id,
@@ -142,13 +157,91 @@ async def upload_videos(request: UploadRequest):
         raise HTTPException(status_code=500, detail=f"Failed to start upload task: {str(e)}")
 
 
-@router.get("/", response_model=List[TaskLog])
+@router.get("/")
 async def get_tasks(status: Optional[str] = None, limit: int = 50):
-    """Get task logs with progress information"""
+    """Get task logs - returning plain JSON to avoid Pydantic validation"""
     try:
-        return await TaskService.get_recent_tasks(status=status, limit=limit)
+        with get_database_connection() as conn:
+            cursor = conn.cursor()
+
+            if status:
+                cursor.execute('''
+                               SELECT id,
+                                      task_type,
+                                      status,
+                                      account_username,
+                                      message,
+                                      created_at,
+                                      progress,
+                                      total_items,
+                                      current_item,
+                                      next_action_at,
+                                      cooldown_seconds
+                               FROM task_logs
+                               WHERE status = %s
+                               ORDER BY created_at DESC
+                                   LIMIT %s
+                               ''', (status, limit))
+            else:
+                cursor.execute('''
+                               SELECT id,
+                                      task_type,
+                                      status,
+                                      account_username,
+                                      message,
+                                      created_at,
+                                      progress,
+                                      total_items,
+                                      current_item,
+                                      next_action_at,
+                                      cooldown_seconds
+                               FROM task_logs
+                               ORDER BY created_at DESC
+                                   LIMIT %s
+                               ''', (limit,))
+
+            tasks = []
+            rows = cursor.fetchall()
+
+            print(f"🔍 Fetched {len(rows)} task rows from database")
+
+            for i, row in enumerate(rows):
+                try:
+                    # Безопасное извлечение данных
+                    task_dict = {
+                        "id": row[0] if len(row) > 0 else "",
+                        "task_type": row[1] if len(row) > 1 else "",
+                        "status": row[2] if len(row) > 2 else "",
+                        "account_username": row[3] if len(row) > 3 else None,
+                        "message": row[4] if len(row) > 4 else None,
+                        "created_at": safe_datetime_to_string(row[5]) if len(row) > 5 else datetime.now().isoformat(),
+                        "progress": row[6] if len(row) > 6 else 0,
+                        "total_items": row[7] if len(row) > 7 else 0,
+                        "current_item": row[8] if len(row) > 8 else None,
+                        "next_action_at": safe_datetime_to_string(row[9]) if len(row) > 9 else None,
+                        "cooldown_seconds": row[10] if len(row) > 10 else None
+                    }
+
+                    tasks.append(task_dict)
+                    print(f"✅ Added task {i}: {task_dict['id']}")
+
+                except Exception as row_error:
+                    print(f"❌ Error processing task row {i}: {row_error}")
+                    print(f"Raw row data: {row}")
+                    continue
+
+            print(f"✅ Successfully processed {len(tasks)} tasks")
+
+            # Возвращаем обычный JSON ответ вместо Pydantic модели
+            return JSONResponse(content=tasks)
+
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to get tasks: {str(e)}")
+        print(f"❌ Error in get_tasks: {e}")
+        import traceback
+        traceback.print_exc()
+
+        # Возвращаем пустой список вместо ошибки
+        return JSONResponse(content=[])
 
 
 @router.get("/{task_id}/progress")
@@ -163,7 +256,6 @@ async def get_task_progress(task_id: str):
         remaining_time = None
         if task.next_action_at and task.status == "running":
             try:
-                # Parse datetime string properly
                 if 'T' in task.next_action_at:
                     next_action = datetime.fromisoformat(task.next_action_at.replace('Z', '+00:00'))
                 else:
@@ -198,7 +290,6 @@ async def get_task_progress(task_id: str):
 async def cancel_task(task_id: str):
     """Cancel a running task"""
     try:
-        # Check if task exists and is running
         task = await TaskService.get_task_progress(task_id)
         if not task:
             raise HTTPException(status_code=404, detail="Task not found")
@@ -206,14 +297,12 @@ async def cancel_task(task_id: str):
         if task.status != "running":
             return {"message": f"Task {task_id} is not running (status: {task.status})"}
 
-        # Update task status to cancelled immediately
         await TaskService.update_task_status(
             task_id=task_id,
             status="cancelled",
             message="Task cancelled by user request"
         )
 
-        # Try to revoke Celery task if it's a Celery task
         try:
             from celery_app import app as celery_app
             celery_app.control.revoke(task_id, terminate=True)
@@ -236,12 +325,10 @@ async def delete_task(task_id: str):
         with get_database_connection() as conn:
             cursor = conn.cursor()
 
-            # Check if task exists
             cursor.execute("SELECT id FROM task_logs WHERE id = %s", (task_id,))
             if not cursor.fetchone():
                 raise HTTPException(status_code=404, detail="Task not found")
 
-            # Delete the task
             cursor.execute("DELETE FROM task_logs WHERE id = %s", (task_id,))
             conn.commit()
 
@@ -260,7 +347,6 @@ async def cleanup_old_tasks():
         with get_database_connection() as conn:
             cursor = conn.cursor()
 
-            # Delete tasks older than 7 days that are completed
             cursor.execute('''
                            DELETE
                            FROM task_logs
@@ -335,5 +421,3 @@ async def get_task_stats():
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to get task stats: {str(e)}")
-
-    
