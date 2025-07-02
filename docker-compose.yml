@@ -83,9 +83,6 @@ services:
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
 
-      # Python path fix for imports
-      - PYTHONPATH=/app
-
     ports:
       - "8000:8000"
 
@@ -116,7 +113,9 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: instagram_bot_celery
-    command: celery -A celery_app worker --loglevel=info --pool=solo --concurrency=1
+    # Используем кастомный скрипт запуска вместо прямого вызова celery
+    command: bash start_celery.sh
+    working_dir: /app
     environment:
       # Database
       - DATABASE_URL=postgresql://instagram_bot:${POSTGRES_PASSWORD:-strong_password_123}@postgres:5432/instagram_bot
@@ -154,9 +153,6 @@ services:
       # Celery
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
-
-      # Python path fix for imports
-      - PYTHONPATH=/app
     
     volumes:
       - ./videos:/app/videos
