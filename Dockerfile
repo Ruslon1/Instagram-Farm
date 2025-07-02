@@ -37,7 +37,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Install Playwright browsers (cached separately)
 RUN playwright install chromium --with-deps
 
-# Create startup script for main app
+# Create startup script
 RUN echo '#!/bin/bash\nXvfb :99 -screen 0 1024x768x24 > /dev/null 2>&1 &\nexec "$@"' > /usr/local/bin/start-app.sh && \
     chmod +x /usr/local/bin/start-app.sh
 
@@ -46,9 +46,6 @@ COPY . .
 
 # Create directories
 RUN mkdir -p videos sessions logs static
-
-# Make the celery startup script executable
-RUN chmod +x start_celery.sh
 
 EXPOSE 8000
 
