@@ -315,10 +315,6 @@ docker-compose up -d --scale app=3
 - **Connection Pooling** - Database connection optimization
 - **Caching Strategy** - Multi-level caching for API responses
 
-## 🤝 Contributing
-
-We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
-
 ### Development Workflow
 1. **Fork** the repository
 2. **Create** feature branch (`git checkout -b feature/amazing-feature`)
@@ -331,10 +327,6 @@ We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) f
 - **TypeScript**: ESLint, Prettier formatting
 - **Testing**: Unit tests for all new features
 - **Documentation**: Update README for significant changes
-
-## 📄 License
-
-This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) file for details.
 
 ## 🆘 Support
 
