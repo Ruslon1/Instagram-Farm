@@ -228,26 +228,35 @@ const Accounts = () => {
                   </div>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  <div className="flex items-center space-x-2">
+                  <div className="flex items-center space-x-3">
+                    {/* Verify Button */}
                     <button
                       onClick={() => handleVerifyAccount(account.username)}
                       disabled={isVerifying === account.username || verifyMutation.isPending}
-                      className="text-green-600 hover:text-green-800 flex items-center space-x-1 disabled:opacity-50"
+                      className="inline-flex items-center px-2 py-1 text-xs font-medium rounded border border-green-300 text-green-600 hover:bg-green-50 hover:text-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
                       title="Verify login and refresh session"
                     >
                       {isVerifying === account.username ? (
-                        <RefreshCw className="w-4 h-4 animate-spin" />
+                        <>
+                          <RefreshCw className="w-3 h-3 mr-1 animate-spin" />
+                          Verifying...
+                        </>
                       ) : (
-                        <Shield className="w-4 h-4" />
+                        <>
+                          <Shield className="w-3 h-3 mr-1" />
+                          Verify
+                        </>
                       )}
-                      <span>{isVerifying === account.username ? 'Verifying...' : 'Verify'}</span>
                     </button>
+
+                    {/* Proxy Button */}
                     <button
                       onClick={() => handleProxyClick(account.username)}
-                      className="text-blue-600 hover:text-blue-800 flex items-center space-x-1"
+                      className="inline-flex items-center px-2 py-1 text-xs font-medium rounded border border-blue-300 text-blue-600 hover:bg-blue-50 hover:text-blue-700"
+                      title="Configure proxy settings"
                     >
-                      <Settings className="w-4 h-4" />
-                      <span>Proxy</span>
+                      <Settings className="w-3 h-3 mr-1" />
+                      Proxy
                     </button>
                   </div>
                 </td>
