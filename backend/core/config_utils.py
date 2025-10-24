@@ -1,18 +1,37 @@
 """
-Configuration utilities for flexible settings management
+Configuration utilities for flexible settings management.
+
+This module provides centralized configuration management with environment variable
+support, type-safe getters, and validation for all application settings.
 """
 
-from typing import Any, Dict, Optional, List
+from typing import Any, Dict, Optional, List, Union
 from config.settings import settings
 import os
 
 
 class ConfigManager:
-    """Centralized configuration management with environment variable support"""
+    """Centralized configuration management with environment variable support.
+
+    Provides type-safe access to configuration values with validation and
+    sensible defaults. Supports environment variable overrides for all settings.
+    """
 
     @staticmethod
     def get_env_var(key: str, default: Any = None, required: bool = False) -> Any:
-        """Get environment variable with validation"""
+        """Get environment variable with validation.
+
+        Args:
+            key: Environment variable name
+            default: Default value if not set
+            required: Whether to raise error if not set
+
+        Returns:
+            Environment variable value or default
+
+        Raises:
+            ValueError: If required=True and variable is not set
+        """
         value = os.getenv(key, default)
         if required and value is None:
             raise ValueError(f"Required environment variable '{key}' is not set")
@@ -20,7 +39,16 @@ class ConfigManager:
 
     @staticmethod
     def get_env_list(key: str, default: List[str] = None, separator: str = ",") -> List[str]:
-        """Get environment variable as list"""
+        """Get environment variable as list with separator parsing.
+
+        Args:
+            key: Environment variable name
+            default: Default list if not set
+            separator: String separator for splitting values
+
+        Returns:
+            List of stripped, non-empty strings
+        """
         value = os.getenv(key)
         if value is None:
             return default or []
@@ -28,13 +56,31 @@ class ConfigManager:
 
     @staticmethod
     def get_env_bool(key: str, default: bool = False) -> bool:
-        """Get environment variable as boolean"""
+        """Get environment variable as boolean with common truthy values.
+
+        Args:
+            key: Environment variable name
+            default: Default boolean value
+
+        Returns:
+            True for 'true', '1', 'yes', 'on' (case insensitive), False otherwise
+        """
         value = os.getenv(key, str(default)).lower()
         return value in ('true', '1', 'yes', 'on')
 
     @staticmethod
     def get_env_int(key: str, default: int = 0, min_val: int = None, max_val: int = None) -> int:
-        """Get environment variable as integer with validation"""
+        """Get environment variable as integer with range validation.
+
+        Args:
+            key: Environment variable name
+            default: Default integer value
+            min_val: Minimum allowed value (inclusive)
+            max_val: Maximum allowed value (inclusive)
+
+        Returns:
+            Integer value clamped to min/max range, or default on error
+        """
         try:
             value = int(os.getenv(key, default))
             if min_val is not None and value < min_val:

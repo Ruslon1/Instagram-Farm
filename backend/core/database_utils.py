@@ -1,16 +1,29 @@
 """
-Database utility functions to reduce code duplication
+Database utility functions to reduce code duplication.
+
+This module provides centralized database operations used across the application
+to eliminate repetitive query code and ensure consistent error handling.
 """
 
-from typing import List, Dict, Any, Optional, Tuple
+from typing import List, Dict, Any, Optional, Tuple, Union
 from modules.database import get_database_connection
 from core.logging import get_logger
 
 logger = get_logger("database_utils")
 
 
-def get_account_by_username(username: str) -> Optional[Tuple]:
-    """Get account data by username"""
+def get_account_by_username(username: str) -> Optional[Tuple[str, str, str, Optional[str], str, int, int, Optional[str]]]:
+    """Get complete account data by username.
+
+    Returns a tuple containing:
+    (username, password, theme, 2fa_key, status, active, posts_count, last_login)
+
+    Args:
+        username: Instagram account username
+
+    Returns:
+        Account data tuple or None if not found
+    """
     try:
         with get_database_connection() as conn:
             cursor = conn.cursor()
@@ -25,7 +38,14 @@ def get_account_by_username(username: str) -> Optional[Tuple]:
 
 
 def account_exists(username: str) -> bool:
-    """Check if account exists"""
+    """Check if an Instagram account exists in the database.
+
+    Args:
+        username: Instagram account username to check
+
+    Returns:
+        True if account exists, False otherwise
+    """
     try:
         with get_database_connection() as conn:
             cursor = conn.cursor()
@@ -37,7 +57,14 @@ def account_exists(username: str) -> bool:
 
 
 def video_exists(video_link: str) -> bool:
-    """Check if video exists"""
+    """Check if a video exists in the database by its link.
+
+    Args:
+        video_link: Full TikTok video URL to check
+
+    Returns:
+        True if video exists, False otherwise
+    """
     try:
         with get_database_connection() as conn:
             cursor = conn.cursor()
@@ -49,7 +76,14 @@ def video_exists(video_link: str) -> bool:
 
 
 def get_active_accounts() -> List[Dict[str, Any]]:
-    """Get all active accounts with their data"""
+    """Get all active Instagram accounts with complete data including proxy settings.
+
+    Returns a list of dictionaries containing all account information needed for
+    upload operations, including credentials, themes, and proxy configurations.
+
+    Returns:
+        List of account dictionaries with all necessary fields
+    """
     try:
         with get_database_connection() as conn:
             cursor = conn.cursor()
@@ -88,7 +122,16 @@ def get_active_accounts() -> List[Dict[str, Any]]:
 
 
 def get_videos_by_theme(theme: Optional[str] = None, status: Optional[str] = None, limit: int = 100) -> List[Dict[str, Any]]:
-    """Get videos with optional filtering"""
+    """Get videos from database with optional filtering by theme and status.
+
+    Args:
+        theme: Optional theme filter (e.g., 'ishowspeed', 'mrbeast')
+        status: Optional status filter ('pending', 'downloaded', 'uploaded', 'failed')
+        limit: Maximum number of videos to return (default: 100)
+
+    Returns:
+        List of video dictionaries with link, theme, status, and created_at fields
+    """
     try:
         with get_database_connection() as conn:
             cursor = conn.cursor()
@@ -130,7 +173,19 @@ def get_videos_by_theme(theme: Optional[str] = None, status: Optional[str] = Non
 
 
 def count_records(table: str, conditions: Optional[Dict[str, Any]] = None) -> int:
-    """Count records in a table with optional conditions"""
+    """Count records in a database table with optional WHERE conditions.
+
+    Args:
+        table: Database table name ('accounts', 'videos', 'publicationhistory', etc.)
+        conditions: Optional dictionary of column=value conditions for WHERE clause
+
+    Returns:
+        Number of matching records, or 0 on error
+
+    Example:
+        count_records('accounts', {'active': 1})  # Count active accounts
+        count_records('videos')  # Count all videos
+    """
     try:
         with get_database_connection() as conn:
             cursor = conn.cursor()
@@ -156,7 +211,14 @@ def count_records(table: str, conditions: Optional[Dict[str, Any]] = None) -> in
 
 
 def get_table_stats() -> Dict[str, Any]:
-    """Get statistics for all main tables"""
+    """Get comprehensive statistics for all main database tables.
+
+    Returns detailed counts and breakdowns for accounts, videos, publications,
+    TikTok sources, and task logs with status distributions.
+
+    Returns:
+        Dictionary containing statistics for all tables with breakdowns by status/type
+    """
     try:
         stats = {
             'accounts': {
