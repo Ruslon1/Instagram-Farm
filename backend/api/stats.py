@@ -1,4 +1,5 @@
 from fastapi import APIRouter, HTTPException
+from core import count_records, get_table_stats
 from modules.database import get_database_connection
 
 router = APIRouter()
@@ -20,35 +21,10 @@ async def get_stats():
         with get_database_connection() as conn:
             cursor = conn.cursor()
 
-            # Count accounts with safe result handling
-            try:
-                cursor.execute("SELECT COUNT(*) FROM accounts")
-                result = cursor.fetchone()
-                if result:
-                    stats["active_accounts"] = int(result[0])
-                    print(f"Active accounts: {stats['active_accounts']}")
-            except Exception as e:
-                print(f"Error counting accounts: {e}")
-
-            # Count videos with safe result handling
-            try:
-                cursor.execute("SELECT COUNT(*) FROM videos")
-                result = cursor.fetchone()
-                if result:
-                    stats["pending_videos"] = int(result[0])
-                    print(f"Pending videos: {stats['pending_videos']}")
-            except Exception as e:
-                print(f"Error counting videos: {e}")
-
-            # Count posts today with safe result handling
-            try:
-                cursor.execute("SELECT COUNT(*) FROM publicationhistory")
-                result = cursor.fetchone()
-                if result:
-                    stats["posts_today"] = int(result[0])
-                    print(f"Posts today: {stats['posts_today']}")
-            except Exception as e:
-                print(f"Error counting posts: {e}")
+            # Use utility functions for cleaner code
+            stats["active_accounts"] = count_records('accounts', {'active': 1})
+            stats["pending_videos"] = count_records('videos')
+            stats["posts_today"] = count_records('publicationhistory')
 
             # Running tasks (simplified for now)
             stats["running_tasks"] = 0

@@ -4,9 +4,9 @@ from typing import List
 import requests
 import time
 from api.models import AccountCreate, ProxySettings, ProxyTestResult
-from modules.database import get_database_connection
 from modules.uploader import test_instagram_connection, cleanup_session
 from services.proxy_monitoring_service import ProxyMonitoringService
+from core import account_exists, get_account_by_username
 
 router = APIRouter()
 
@@ -92,11 +92,8 @@ async def create_account(account: AccountCreate):
         with get_database_connection() as conn:
             cursor = conn.cursor()
 
-            # Check if account exists
-            cursor.execute("SELECT username FROM accounts WHERE username = ?", (account.username,))
-            existing = cursor.fetchone()
-
-            if existing:
+            # Check if account exists using utility function
+            if account_exists(account.username):
                 raise HTTPException(status_code=400, detail="Account already exists")
 
             # First, test Instagram connection to verify credentials
@@ -156,17 +153,12 @@ async def verify_account(username: str):
         with get_database_connection() as conn:
             cursor = conn.cursor()
 
-            # Get account details
-            cursor.execute(
-                'SELECT username, password, "2FAKey" FROM accounts WHERE username = ?',
-                (username,)
-            )
-            account_data = cursor.fetchone()
-
+            # Get account details using utility function
+            account_data = get_account_by_username(username)
             if not account_data:
                 raise HTTPException(status_code=404, detail="Account not found")
 
-            account_username, password, two_fa_key = account_data
+            account_username, password, two_fa_key = account_data[0], account_data[1], account_data[3]
 
             print(f"🧪 Verifying Instagram login for @{username}")
 
@@ -229,11 +221,8 @@ async def update_account_proxy(username: str, proxy_settings: ProxySettings):
         with get_database_connection() as conn:
             cursor = conn.cursor()
 
-            # Check if account exists
-            cursor.execute("SELECT username FROM accounts WHERE username = %s", (username,))
-            account = cursor.fetchone()
-
-            if not account:
+            # Check if account exists using utility function
+            if not account_exists(username):
                 raise HTTPException(status_code=404, detail="Account not found")
 
             # Update proxy settings
@@ -276,11 +265,8 @@ async def remove_account_proxy(username: str):
         with get_database_connection() as conn:
             cursor = conn.cursor()
 
-            # Check if account exists
-            cursor.execute("SELECT username FROM accounts WHERE username = ?", (username,))
-            account = cursor.fetchone()
-
-            if not account:
+            # Check if account exists using utility function
+            if not account_exists(username):
                 raise HTTPException(status_code=404, detail="Account not found")
 
             # Clear proxy settings
@@ -328,8 +314,23 @@ async def test_account_proxy(username: str):
 
             proxy_host, proxy_port, proxy_username, proxy_password, proxy_type = proxy_data
 
-            # Test proxy connection
-            result = await test_proxy_connection(proxy_host, proxy_port, proxy_username, proxy_password, proxy_type)
+            # Test proxy connection using the utility function
+            from modules.proxy_utils import test_proxy_connection as test_proxy
+            proxy_config = {
+                'host': proxy_host,
+                'port': proxy_port,
+                'username': proxy_username,
+                'password': proxy_password,
+                'type': proxy_type
+            }
+            is_working = test_proxy(proxy_config, timeout=20)
+
+            result = {
+                "success": is_working,
+                "message": "Proxy is working correctly" if is_working else "Proxy connection failed",
+                "response_time": None,
+                "external_ip": None
+            }
 
             # Update proxy status in database
             new_status = "working" if result["success"] else "failed"
@@ -434,98 +435,4 @@ async def get_proxy_statistics():
         raise HTTPException(status_code=500, detail=f"Failed to get proxy statistics: {str(e)}")
 
 
-async def test_proxy_connection(host: str, port: int, username: str = None, password: str = None,
-                                proxy_type: str = "HTTP") -> dict:
-    """Test proxy connection by making request to external service"""
-    try:
-        # Normalize proxy type
-        normalized_type = proxy_type.upper()
-        if normalized_type == 'HTTPS':
-            protocol = 'http'  # HTTPS proxies use HTTP protocol
-        elif normalized_type == 'SOCKS5':
-            protocol = 'socks5'
-        else:
-            protocol = 'http'
-
-        # Build proxy URL
-        if username and password:
-            proxy_url = f"{protocol}://{username}:{password}@{host}:{port}"
-        else:
-            proxy_url = f"{protocol}://{host}:{port}"
-
-        proxies = {
-            'http': proxy_url,
-            'https': proxy_url
-        }
-
-        print(f"🔍 Testing proxy: {proxy_type} {host}:{port}")
-
-        # Try multiple test endpoints
-        test_urls = [
-            'http://httpbin.org/ip',
-            'https://httpbin.org/ip',
-            'http://icanhazip.com',
-            'https://api.ipify.org?format=json'
-        ]
-
-        for test_url in test_urls:
-            try:
-                print(f"🌐 Testing with: {test_url}")
-                start_time = time.time()
-
-                response = requests.get(
-                    test_url,
-                    proxies=proxies,
-                    timeout=20,
-                    verify=False  # Skip SSL verification
-                )
-
-                response_time = time.time() - start_time
-
-                if response.status_code == 200:
-                    try:
-                        # Try to extract IP from response
-                        if 'json' in response.headers.get('content-type', ''):
-                            ip_data = response.json()
-                            external_ip = ip_data.get('origin', ip_data.get('ip', 'Unknown'))
-                        else:
-                            external_ip = response.text.strip()
-                    except:
-                        external_ip = "Unknown"
-
-                    print(f"✅ Proxy test successful: {response_time:.2f}s, IP: {external_ip}")
-
-                    return {
-                        "success": True,
-                        "message": f"Proxy is working correctly (via {test_url})",
-                        "response_time": round(response_time, 2),
-                        "external_ip": external_ip
-                    }
-                else:
-                    print(f"❌ Status {response.status_code} from {test_url}")
-
-            except requests.exceptions.Timeout:
-                print(f"⏰ Timeout with {test_url}")
-                continue
-            except requests.exceptions.ProxyError as e:
-                print(f"🚫 Proxy error with {test_url}: {e}")
-                continue
-            except requests.exceptions.ConnectionError as e:
-                print(f"🔌 Connection error with {test_url}: {e}")
-                continue
-            except Exception as e:
-                print(f"❓ Error with {test_url}: {e}")
-                continue
-
-        # All URLs failed
-        return {
-            "success": False,
-            "message": "All test URLs failed - proxy may be down or misconfigured"
-        }
-
-    except Exception as e:
-        print(f"❌ Proxy test exception: {e}")
-        return {
-            "success": False,
-            "message": f"Proxy test failed: {str(e)}"
-        }
+# Remove duplicate proxy test function - use the one from proxy_utils instead

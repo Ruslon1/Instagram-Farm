@@ -2,8 +2,7 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse
 from typing import List, Optional
 from datetime import datetime
-from modules.database import get_database_connection
-from core import safe_datetime_to_string
+from core import safe_datetime_to_string, get_videos_by_theme, video_exists, count_records
 
 router = APIRouter()
 
@@ -20,60 +19,22 @@ async def get_videos(theme: Optional[str] = None, limit: int = 100):
         if limit < 1 or limit > 1000:
             raise HTTPException(status_code=400, detail="Limit must be between 1 and 1000")
 
-        with get_database_connection() as conn:
-            cursor = conn.cursor()
+        # Use utility function for cleaner code
+        videos_data = get_videos_by_theme(theme=theme, limit=limit)
 
-            if theme:
-                cursor.execute('''
-                    SELECT link, theme,
-                           COALESCE(status, 'pending') as status,
-                           created_at
-                    FROM videos
-                    WHERE theme = ?
-                    ORDER BY created_at DESC LIMIT ?
-                ''', (theme, limit))
-            else:
-                cursor.execute('''
-                    SELECT link, theme,
-                           COALESCE(status, 'pending') as status,
-                           created_at
-                    FROM videos
-                    ORDER BY created_at DESC LIMIT ?
-                ''', (limit,))
+        # Convert to the expected format
+        videos = []
+        for video in videos_data:
+            video_dict = {
+                "link": video['link'],
+                "theme": video['theme'],
+                "status": video['status'],
+                "created_at": safe_datetime_to_string(video['created_at']) or datetime.now().isoformat()
+            }
+            videos.append(video_dict)
 
-            videos = []
-            rows = cursor.fetchall()
-
-            print(f"✅ Fetched {len(rows)} video rows from database")
-
-            if rows:
-                for i, row in enumerate(rows):
-                    try:
-                        # Безопасное извлечение данных
-                        link = row[0] if len(row) > 0 and row[0] else ""
-                        theme_val = row[1] if len(row) > 1 and row[1] else "unknown"
-                        status = row[2] if len(row) > 2 and row[2] else "pending"
-                        created_at = row[3] if len(row) > 3 else None
-
-                        # Преобразование datetime в строку
-                        created_at_str = safe_datetime_to_string(created_at)
-
-                        # Проверяем валидность данных
-                        if link and theme_val:
-                            video_dict = {
-                                "link": link,
-                                "theme": theme_val,
-                                "status": status,
-                                "created_at": created_at_str or datetime.now().isoformat()
-                            }
-                            videos.append(video_dict)
-
-                    except Exception as row_error:
-                        print(f"❌ Error processing video row {i}: {row_error}")
-                        continue
-
-            print(f"✅ Successfully processed {len(videos)} videos")
-            return JSONResponse(content=videos)
+        print(f"✅ Successfully processed {len(videos)} videos")
+        return JSONResponse(content=videos)
 
     except Exception as e:
         print(f"❌ Error in get_videos: {e}")
@@ -94,8 +55,7 @@ async def delete_video(video_link: str):
         with get_database_connection() as conn:
             cursor = conn.cursor()
 
-            cursor.execute("SELECT link FROM videos WHERE link = ?", (video_link,))
-            if not cursor.fetchone():
+            if not video_exists(video_link):
                 raise HTTPException(status_code=404, detail="Video not found")
 
             cursor.execute("DELETE FROM videos WHERE link = ?", (video_link,))
@@ -125,8 +85,7 @@ async def bulk_delete_videos(video_links: List[str]):
 
             for video_link in video_links:
                 try:
-                    cursor.execute("SELECT link FROM videos WHERE link = ?", (video_link,))
-                    if cursor.fetchone():
+                    if video_exists(video_link):
                         cursor.execute("DELETE FROM videos WHERE link = ?", (video_link,))
                         deleted_count += 1
                     else:
@@ -244,8 +203,7 @@ async def update_video_status(video_link: str, new_status: str):
         with get_database_connection() as conn:
             cursor = conn.cursor()
 
-            cursor.execute("SELECT link FROM videos WHERE link = ?", (video_link,))
-            if not cursor.fetchone():
+            if not video_exists(video_link):
                 raise HTTPException(status_code=404, detail="Video not found")
 
             cursor.execute(
@@ -321,10 +279,8 @@ async def get_video_stats():
                         combined_stats[theme] = {}
                     combined_stats[theme][status] = count
 
-            # Get total count
-            cursor.execute("SELECT COUNT(*) FROM videos")
-            total_result = cursor.fetchone()
-            total_videos = total_result[0] if total_result else 0
+            # Get total count using utility function
+            total_videos = count_records('videos')
 
             return {
                 "total_videos": total_videos,

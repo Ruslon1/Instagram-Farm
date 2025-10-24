@@ -4,6 +4,11 @@ from datetime import datetime
 
 from .logging import setup_logging, get_logger
 from .security import get_current_user, verify_api_key
+from .database_utils import (
+    get_account_by_username, account_exists, video_exists,
+    get_active_accounts, get_videos_by_theme, count_records, get_table_stats
+)
+from .config_utils import ConfigManager
 
 
 def safe_datetime_to_string(dt_value: Optional[Any]) -> Optional[str]:
@@ -32,5 +37,8 @@ def safe_datetime_to_string(dt_value: Optional[Any]) -> Optional[str]:
 __all__ = [
     "setup_logging", "get_logger", "get_current_user", "verify_api_key",
     "safe_datetime_to_string", "sanitize_input", "validate_username",
-    "validate_url", "validate_theme", "validate_video_link"
+    "validate_url", "validate_theme", "validate_video_link",
+    "get_account_by_username", "account_exists", "video_exists",
+    "get_active_accounts", "get_videos_by_theme", "count_records", "get_table_stats",
+    "ConfigManager"
 ]

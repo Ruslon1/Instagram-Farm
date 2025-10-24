@@ -8,6 +8,7 @@ import uuid
 from config.settings import settings
 from core.logging import setup_logging, get_logger, log_api_request
 from core.security import SecurityHeaders
+from core import ConfigManager
 
 # Import API routers
 from api.accounts import router as accounts_router
@@ -208,13 +209,20 @@ async def lifespan(app: FastAPI):
             os.makedirs(directory, exist_ok=True)
         logger.info("Required directories created")
 
-        # Log configuration
+        # Validate configuration
+        config_issues = ConfigManager.validate_config()
+        if config_issues:
+            logger.warning("Configuration issues found", issues=config_issues)
+            for issue in config_issues:
+                logger.warning(f"Config issue: {issue}")
+
+        # Log configuration summary
         logger.info(
-            "Application configuration",
-            database_url=settings.database_url.split("@")[
-                -1] if "@" in settings.database_url else settings.database_url,
-            redis_url=settings.redis_url.split("@")[-1] if "@" in settings.redis_url else settings.redis_url,
-            allowed_origins=settings.get_allowed_origins(),
+            "Application configuration loaded",
+            database_type=ConfigManager.get_database_config()['type'],
+            redis_configured=bool(settings.redis_url),
+            telegram_enabled=ConfigManager.get_telegram_config()['enabled'],
+            security_enabled=bool(settings.api_key),
             debug=settings.debug
         )
 
