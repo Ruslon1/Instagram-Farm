@@ -1,28 +1,6 @@
 version: '3.8'
 
 services:
-  postgres:
-    image: postgres:15-alpine
-    container_name: instagram_bot_postgres
-    environment:
-      POSTGRES_DB: instagram_bot
-      POSTGRES_USER: instagram_bot
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-strong_password_123}
-      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U instagram_bot -d instagram_bot"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 30s
-    restart: unless-stopped
-    networks:
-      - instagram_bot_network
-
   redis:
     image: redis:7-alpine
     container_name: instagram_bot_redis
@@ -42,13 +20,13 @@ services:
       - instagram_bot_network
 
   app:
-    build: 
+    build:
       context: .
       dockerfile: Dockerfile
     container_name: instagram_bot_app
     environment:
-      # Database
-      - DATABASE_URL=postgresql://instagram_bot:${POSTGRES_PASSWORD:-strong_password_123}@postgres:5432/instagram_bot
+      # Database (SQLite - file-based, no external server needed)
+      - DATABASE_URL=sqlite:///./instagram_bot.db
       - REDIS_URL=redis://redis:6379/0
       
       # Application
@@ -94,8 +72,6 @@ services:
       - ./logs:/app/logs
       
     depends_on:
-      postgres:
-        condition: service_healthy
       redis:
         condition: service_healthy
         
@@ -111,14 +87,14 @@ services:
       - instagram_bot_network
 
   celery:
-    build: 
+    build:
       context: .
       dockerfile: Dockerfile
     container_name: instagram_bot_celery
     command: celery -A celery_app worker --loglevel=info --pool=solo --concurrency=1
     environment:
-      # Database
-      - DATABASE_URL=postgresql://instagram_bot:${POSTGRES_PASSWORD:-strong_password_123}@postgres:5432/instagram_bot
+      # Database (SQLite - file-based, no external server needed)
+      - DATABASE_URL=sqlite:///./instagram_bot.db
       - REDIS_URL=redis://redis:6379/0
       
       # Application
@@ -162,8 +138,6 @@ services:
       - ./logs:/app/logs
       
     depends_on:
-      postgres:
-        condition: service_healthy
       redis:
         condition: service_healthy
       app:
@@ -190,8 +164,6 @@ services:
       - instagram_bot_network
 
 volumes:
-  postgres_data:
-    driver: local
   redis_data:
     driver: local
 
