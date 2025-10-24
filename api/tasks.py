@@ -61,7 +61,7 @@ async def fetch_videos(request: FetchRequest):
                 for video_link in new_videos:
                     try:
                         cursor.execute(
-                            "INSERT INTO videos (link, theme, status) VALUES (%s, %s, 'pending') ON CONFLICT (link, theme) DO NOTHING",
+                            "INSERT OR IGNORE INTO videos (link, theme, status) VALUES (?, ?, 'pending')",
                             (video_link, request.theme)
                         )
                         if cursor.rowcount > 0:
@@ -111,7 +111,7 @@ async def upload_videos(request: UploadRequest):
         with get_database_connection() as conn:
             cursor = conn.cursor()
             cursor.execute(
-                'SELECT username, password, theme, "2FAKey" FROM accounts WHERE username = %s',
+                'SELECT username, password, theme, "2FAKey" FROM accounts WHERE username = ?',
                 (request.account_username,)
             )
             account_data = cursor.fetchone()
@@ -166,39 +166,39 @@ async def get_tasks(status: Optional[str] = None, limit: int = 50):
 
             if status:
                 cursor.execute('''
-                               SELECT id,
-                                      task_type,
-                                      status,
-                                      account_username,
-                                      message,
-                                      created_at,
-                                      progress,
-                                      total_items,
-                                      current_item,
-                                      next_action_at,
-                                      cooldown_seconds
-                               FROM task_logs
-                               WHERE status = %s
-                               ORDER BY created_at DESC
-                                   LIMIT %s
-                               ''', (status, limit))
+                    SELECT id,
+                           task_type,
+                           status,
+                           account_username,
+                           message,
+                           created_at,
+                           progress,
+                           total_items,
+                           current_item,
+                           next_action_at,
+                           cooldown_seconds
+                    FROM task_logs
+                    WHERE status = ?
+                    ORDER BY created_at DESC
+                    LIMIT ?
+                ''', (status, limit))
             else:
                 cursor.execute('''
-                               SELECT id,
-                                      task_type,
-                                      status,
-                                      account_username,
-                                      message,
-                                      created_at,
-                                      progress,
-                                      total_items,
-                                      current_item,
-                                      next_action_at,
-                                      cooldown_seconds
-                               FROM task_logs
-                               ORDER BY created_at DESC
-                                   LIMIT %s
-                               ''', (limit,))
+                    SELECT id,
+                           task_type,
+                           status,
+                           account_username,
+                           message,
+                           created_at,
+                           progress,
+                           total_items,
+                           current_item,
+                           next_action_at,
+                           cooldown_seconds
+                    FROM task_logs
+                    ORDER BY created_at DESC
+                    LIMIT ?
+                ''', (limit,))
 
             tasks = []
             rows = cursor.fetchall()
@@ -319,11 +319,11 @@ async def delete_task(task_id: str):
         with get_database_connection() as conn:
             cursor = conn.cursor()
 
-            cursor.execute("SELECT id FROM task_logs WHERE id = %s", (task_id,))
+            cursor.execute("SELECT id FROM task_logs WHERE id = ?", (task_id,))
             if not cursor.fetchone():
                 raise HTTPException(status_code=404, detail="Task not found")
 
-            cursor.execute("DELETE FROM task_logs WHERE id = %s", (task_id,))
+            cursor.execute("DELETE FROM task_logs WHERE id = ?", (task_id,))
             conn.commit()
 
             return {"message": f"Task {task_id} deleted successfully"}
@@ -342,11 +342,10 @@ async def cleanup_old_tasks():
             cursor = conn.cursor()
 
             cursor.execute('''
-                           DELETE
-                           FROM task_logs
-                           WHERE status IN ('success', 'failed', 'cancelled')
-                             AND created_at < NOW() - INTERVAL '7 days'
-                           ''')
+                DELETE FROM task_logs
+                WHERE status IN ('success', 'failed', 'cancelled')
+                  AND created_at < datetime('now', '-7 days')
+            ''')
 
             deleted_count = cursor.rowcount
             conn.commit()
@@ -369,39 +368,39 @@ async def get_task_stats():
 
             # Get task counts by status
             cursor.execute('''
-                           SELECT status, COUNT(*) as count
-                           FROM task_logs
-                           GROUP BY status
-                           ORDER BY count DESC
-                           ''')
+                SELECT status, COUNT(*) as count
+                FROM task_logs
+                GROUP BY status
+                ORDER BY count DESC
+            ''')
 
             status_stats = {row[0]: row[1] for row in cursor.fetchall()}
 
             # Get task counts by type
             cursor.execute('''
-                           SELECT task_type, COUNT(*) as count
-                           FROM task_logs
-                           GROUP BY task_type
-                           ORDER BY count DESC
-                           ''')
+                SELECT task_type, COUNT(*) as count
+                FROM task_logs
+                GROUP BY task_type
+                ORDER BY count DESC
+            ''')
 
             type_stats = {row[0]: row[1] for row in cursor.fetchall()}
 
             # Get recent task counts (last 24 hours)
             cursor.execute('''
-                           SELECT COUNT(*) as count
-                           FROM task_logs
-                           WHERE created_at > NOW() - INTERVAL '24 hours'
-                           ''')
+                SELECT COUNT(*) as count
+                FROM task_logs
+                WHERE created_at > datetime('now', '-1 day')
+            ''')
 
             recent_count = cursor.fetchone()[0]
 
             # Get running tasks count
             cursor.execute('''
-                           SELECT COUNT(*) as count
-                           FROM task_logs
-                           WHERE status = 'running'
-                           ''')
+                SELECT COUNT(*) as count
+                FROM task_logs
+                WHERE status = 'running'
+            ''')
 
             running_count = cursor.fetchone()[0]
 

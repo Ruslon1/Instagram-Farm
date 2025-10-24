@@ -20,19 +20,19 @@ class ProxyMonitoringService:
                 cursor = conn.cursor()
 
                 cursor.execute('''
-                               SELECT username,
-                                      proxy_host,
-                                      proxy_port,
-                                      proxy_username,
-                                      proxy_password,
-                                      proxy_type,
-                                      proxy_active,
-                                      proxy_status,
-                                      proxy_last_check
-                               FROM accounts
-                               WHERE proxy_host IS NOT NULL
-                               ORDER BY username
-                               ''')
+                    SELECT username,
+                           proxy_host,
+                           proxy_port,
+                           proxy_username,
+                           proxy_password,
+                           proxy_type,
+                           proxy_active,
+                           proxy_status,
+                           proxy_last_check
+                    FROM accounts
+                    WHERE proxy_host IS NOT NULL
+                    ORDER BY username
+                ''')
 
                 accounts = []
                 for row in cursor.fetchall():
@@ -185,11 +185,11 @@ class ProxyMonitoringService:
                 # For now, we'll just disable proxies that have been failing
                 # In a more advanced implementation, you could track failure counts
                 cursor.execute('''
-                               SELECT username
-                               FROM accounts
-                               WHERE proxy_active = 1
-                                 AND proxy_status = 'failed'
-                               ''')
+                    SELECT username
+                    FROM accounts
+                    WHERE proxy_active = 1
+                      AND proxy_status = 'failed'
+                ''')
 
                 failed_accounts = [row[0] for row in cursor.fetchall()]
 
@@ -198,11 +198,11 @@ class ProxyMonitoringService:
 
                     # Disable failed proxies
                     cursor.execute('''
-                                   UPDATE accounts
-                                   SET proxy_active = 0
-                                   WHERE proxy_active = 1
-                                     AND proxy_status = 'failed'
-                                   ''')
+                        UPDATE accounts
+                        SET proxy_active = 0
+                        WHERE proxy_active = 1
+                          AND proxy_status = 'failed'
+                    ''')
 
                     conn.commit()
 

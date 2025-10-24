@@ -15,11 +15,11 @@ def get_account_proxy_config(username: str) -> Optional[Dict[str, Any]]:
             cursor = conn.cursor()
 
             cursor.execute('''
-                           SELECT proxy_host, proxy_port, proxy_username, proxy_password, 
-                                  proxy_type, proxy_active, proxy_status
-                           FROM accounts 
-                           WHERE username = ? AND proxy_active = 1
-                           ''', (username,))
+                SELECT proxy_host, proxy_port, proxy_username, proxy_password,
+                       proxy_type, proxy_active, proxy_status
+                FROM accounts
+                WHERE username = ? AND proxy_active = 1
+            ''', (username,))
 
             proxy_data = cursor.fetchone()
             if not proxy_data or not proxy_data[0]:
@@ -157,10 +157,10 @@ def update_proxy_status(username: str, status: str, error_message: str = None):
             cursor = conn.cursor()
 
             cursor.execute('''
-                           UPDATE accounts 
-                           SET proxy_status = ?, proxy_last_check = CURRENT_TIMESTAMP
-                           WHERE username = ?
-                           ''', (status, username))
+                UPDATE accounts
+                SET proxy_status = ?, proxy_last_check = CURRENT_TIMESTAMP
+                WHERE username = ?
+            ''', (status, username))
 
             conn.commit()
 

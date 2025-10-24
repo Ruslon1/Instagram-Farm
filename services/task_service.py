@@ -24,23 +24,12 @@ class TaskService:
                 if cooldown_seconds and status == "running":
                     next_action_at = (datetime.now() + timedelta(seconds=cooldown_seconds)).isoformat()
 
-                # Insert or update task log (PostgreSQL compatible)
+                # Insert or replace task log (SQLite compatible)
                 cursor.execute('''
-                    INSERT INTO task_logs 
-                    (id, task_type, status, account_username, message, progress, total_items, 
+                    INSERT OR REPLACE INTO task_logs
+                    (id, task_type, status, account_username, message, progress, total_items,
                      current_item, next_action_at, cooldown_seconds, created_at)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                    ON CONFLICT (id) DO UPDATE SET
-                        task_type = EXCLUDED.task_type,
-                        status = EXCLUDED.status,
-                        account_username = EXCLUDED.account_username,
-                        message = EXCLUDED.message,
-                        progress = EXCLUDED.progress,
-                        total_items = EXCLUDED.total_items,
-                        current_item = EXCLUDED.current_item,
-                        next_action_at = EXCLUDED.next_action_at,
-                        cooldown_seconds = EXCLUDED.cooldown_seconds,
-                        created_at = EXCLUDED.created_at
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ''', (task_id, task_type, status, account_username, message,
                       progress or 0, total_items or 0, current_item, next_action_at,
                       cooldown_seconds, datetime.now().isoformat()))
@@ -106,14 +95,14 @@ class TaskService:
                     next_action_at = (datetime.now() + timedelta(seconds=cooldown_seconds)).isoformat()
 
                 cursor.execute('''
-                    UPDATE task_logs 
-                    SET progress = %s, 
-                        current_item = %s, 
-                        message = %s, 
-                        next_action_at = %s, 
-                        cooldown_seconds = %s, 
-                        created_at = %s
-                    WHERE id = %s
+                    UPDATE task_logs
+                    SET progress = ?,
+                        current_item = ?,
+                        message = ?,
+                        next_action_at = ?,
+                        cooldown_seconds = ?,
+                        created_at = ?
+                    WHERE id = ?
                 ''', (progress, current_item, message, next_action_at,
                       cooldown_seconds, datetime.now().isoformat(), task_id))
 
@@ -132,22 +121,22 @@ class TaskService:
                 # Clear next_action_at and cooldown when task completes or is cancelled
                 if status in ["success", "failed", "cancelled"]:
                     cursor.execute('''
-                        UPDATE task_logs 
-                        SET status = %s, 
-                            message = %s, 
-                            next_action_at = NULL, 
-                            cooldown_seconds = NULL, 
-                            created_at = %s, 
+                        UPDATE task_logs
+                        SET status = ?,
+                            message = ?,
+                            next_action_at = NULL,
+                            cooldown_seconds = NULL,
+                            created_at = ?,
                             progress = CASE WHEN status = 'running' THEN progress ELSE 100 END
-                        WHERE id = %s
+                        WHERE id = ?
                     ''', (status, message, datetime.now().isoformat(), task_id))
                 else:
                     cursor.execute('''
-                        UPDATE task_logs 
-                        SET status = %s, 
-                            message = %s, 
-                            created_at = %s
-                        WHERE id = %s
+                        UPDATE task_logs
+                        SET status = ?,
+                            message = ?,
+                            created_at = ?
+                        WHERE id = ?
                     ''', (status, message, datetime.now().isoformat(), task_id))
 
                 conn.commit()
@@ -170,8 +159,8 @@ class TaskService:
                            CASE WHEN progress IS NULL THEN 0 ELSE progress END as progress,
                            CASE WHEN total_items IS NULL THEN 0 ELSE total_items END as total_items,
                            current_item, next_action_at, cooldown_seconds
-                    FROM task_logs 
-                    WHERE id = %s
+                    FROM task_logs
+                    WHERE id = ?
                 ''', (task_id,))
 
                 row = cursor.fetchone()

@@ -32,20 +32,20 @@ async def get_videos(theme: Optional[str] = None, limit: int = 100):
 
             if theme:
                 cursor.execute('''
-                    SELECT link,theme,
+                    SELECT link, theme,
                            COALESCE(status, 'pending') as status,
                            created_at
                     FROM videos
-                    WHERE theme = %s
-                    ORDER BY created_at DESC LIMIT %s
+                    WHERE theme = ?
+                    ORDER BY created_at DESC LIMIT ?
                 ''', (theme, limit))
             else:
                 cursor.execute('''
-                    SELECT link,theme,
+                    SELECT link, theme,
                            COALESCE(status, 'pending') as status,
                            created_at
                     FROM videos
-                    ORDER BY created_at DESC LIMIT %s
+                    ORDER BY created_at DESC LIMIT ?
                 ''', (limit,))
 
             videos = []
@@ -96,11 +96,11 @@ async def delete_video(video_link: str):
         with get_database_connection() as conn:
             cursor = conn.cursor()
 
-            cursor.execute("SELECT link FROM videos WHERE link = %s", (video_link,))
+            cursor.execute("SELECT link FROM videos WHERE link = ?", (video_link,))
             if not cursor.fetchone():
                 raise HTTPException(status_code=404, detail="Video not found")
 
-            cursor.execute("DELETE FROM videos WHERE link = %s", (video_link,))
+            cursor.execute("DELETE FROM videos WHERE link = ?", (video_link,))
             conn.commit()
 
             return {"message": f"Video deleted successfully", "deleted_link": video_link}
@@ -127,9 +127,9 @@ async def bulk_delete_videos(video_links: List[str]):
 
             for video_link in video_links:
                 try:
-                    cursor.execute("SELECT link FROM videos WHERE link = %s", (video_link,))
+                    cursor.execute("SELECT link FROM videos WHERE link = ?", (video_link,))
                     if cursor.fetchone():
-                        cursor.execute("DELETE FROM videos WHERE link = %s", (video_link,))
+                        cursor.execute("DELETE FROM videos WHERE link = ?", (video_link,))
                         deleted_count += 1
                     else:
                         not_found.append(video_link)
@@ -162,11 +162,11 @@ async def delete_videos_by_theme(theme: str, status: Optional[str] = None):
 
             if status:
                 cursor.execute(
-                    "DELETE FROM videos WHERE theme = %s AND COALESCE(status, 'pending') = %s",
+                    "DELETE FROM videos WHERE theme = ? AND COALESCE(status, 'pending') = ?",
                     (theme, status)
                 )
             else:
-                cursor.execute("DELETE FROM videos WHERE theme = %s", (theme,))
+                cursor.execute("DELETE FROM videos WHERE theme = ?", (theme,))
 
             deleted_count = cursor.rowcount
             conn.commit()
@@ -198,7 +198,7 @@ async def delete_videos_by_status(status: str):
             cursor = conn.cursor()
 
             cursor.execute(
-                "DELETE FROM videos WHERE COALESCE(status, 'pending') = %s",
+                "DELETE FROM videos WHERE COALESCE(status, 'pending') = ?",
                 (status,)
             )
 
@@ -232,12 +232,12 @@ async def update_video_status(video_link: str, new_status: str):
         with get_database_connection() as conn:
             cursor = conn.cursor()
 
-            cursor.execute("SELECT link FROM videos WHERE link = %s", (video_link,))
+            cursor.execute("SELECT link FROM videos WHERE link = ?", (video_link,))
             if not cursor.fetchone():
                 raise HTTPException(status_code=404, detail="Video not found")
 
             cursor.execute(
-                "UPDATE videos SET status = %s WHERE link = %s",
+                "UPDATE videos SET status = ? WHERE link = ?",
                 (new_status, video_link)
             )
             conn.commit()

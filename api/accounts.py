@@ -18,21 +18,21 @@ async def get_accounts():
         with get_database_connection() as conn:
             cursor = conn.cursor()
 
-            # PostgreSQL compatible query with safe result handling
+            # SQLite compatible query with safe result handling
             cursor.execute('''
-                           SELECT username,
-                                  theme,
-                                  COALESCE(status, 'active')          as status,
-                                  COALESCE(posts_count, 0)            as posts_count,
-                                  last_login,
-                                  proxy_host,
-                                  proxy_port,
-                                  COALESCE(proxy_status, 'unchecked') as proxy_status,
-                                  COALESCE(proxy_active, FALSE)       as proxy_active
-                           FROM accounts
-                           WHERE COALESCE(active, TRUE) = TRUE
-                           ORDER BY username
-                           ''')
+                SELECT username,
+                       theme,
+                       COALESCE(status, 'active') as status,
+                       COALESCE(posts_count, 0) as posts_count,
+                       last_login,
+                       proxy_host,
+                       proxy_port,
+                       COALESCE(proxy_status, 'unchecked') as proxy_status,
+                       COALESCE(proxy_active, 0) as proxy_active
+                FROM accounts
+                WHERE COALESCE(active, 1) = 1
+                ORDER BY username
+            ''')
 
             accounts = []
             rows = cursor.fetchall()
@@ -93,7 +93,7 @@ async def create_account(account: AccountCreate):
             cursor = conn.cursor()
 
             # Check if account exists
-            cursor.execute("SELECT username FROM accounts WHERE username = %s", (account.username,))
+            cursor.execute("SELECT username FROM accounts WHERE username = ?", (account.username,))
             existing = cursor.fetchone()
 
             if existing:
@@ -120,10 +120,9 @@ async def create_account(account: AccountCreate):
 
             # Insert new account with verified status
             cursor.execute('''
-                           INSERT INTO accounts (username, password, theme, "2FAKey", status, active, posts_count,
-                                                 last_login)
-                           VALUES (%s, %s, %s, %s, 'active', TRUE, 0, CURRENT_TIMESTAMP)
-                           ''', (account.username, account.password, account.theme, account.two_fa_key))
+                INSERT INTO accounts (username, password, theme, "2FAKey", status, active, posts_count, last_login)
+                VALUES (?, ?, ?, ?, 'active', 1, 0, CURRENT_TIMESTAMP)
+            ''', (account.username, account.password, account.theme, account.two_fa_key))
 
             conn.commit()
 
@@ -159,7 +158,7 @@ async def verify_account(username: str):
 
             # Get account details
             cursor.execute(
-                'SELECT username, password, "2FAKey" FROM accounts WHERE username = %s',
+                'SELECT username, password, "2FAKey" FROM accounts WHERE username = ?',
                 (username,)
             )
             account_data = cursor.fetchone()
@@ -186,11 +185,11 @@ async def verify_account(username: str):
 
                 # Update account status to error
                 cursor.execute('''
-                               UPDATE accounts
-                               SET status     = 'error',
-                                   last_login = NULL
-                               WHERE username = %s
-                               ''', (username,))
+                    UPDATE accounts
+                    SET status = 'error',
+                        last_login = NULL
+                    WHERE username = ?
+                ''', (username,))
                 conn.commit()
 
                 raise HTTPException(
@@ -202,11 +201,11 @@ async def verify_account(username: str):
 
             # Update account status and last login
             cursor.execute('''
-                           UPDATE accounts
-                           SET status     = 'active',
-                               last_login = CURRENT_TIMESTAMP
-                           WHERE username = %s
-                           ''', (username,))
+                UPDATE accounts
+                SET status = 'active',
+                    last_login = CURRENT_TIMESTAMP
+                WHERE username = ?
+            ''', (username,))
             conn.commit()
 
         return {
@@ -239,25 +238,25 @@ async def update_account_proxy(username: str, proxy_settings: ProxySettings):
 
             # Update proxy settings
             cursor.execute('''
-                           UPDATE accounts
-                           SET proxy_host       = %s,
-                               proxy_port       = %s,
-                               proxy_username   = %s,
-                               proxy_password   = %s,
-                               proxy_type       = %s,
-                               proxy_active     = %s,
-                               proxy_status     = 'unchecked',
-                               proxy_last_check = NULL
-                           WHERE username = %s
-                           ''', (
-                               proxy_settings.proxy_host,
-                               proxy_settings.proxy_port,
-                               proxy_settings.proxy_username,
-                               proxy_settings.proxy_password,
-                               proxy_settings.proxy_type,
-                               proxy_settings.proxy_active,
-                               username
-                           ))
+                UPDATE accounts
+                SET proxy_host = ?,
+                    proxy_port = ?,
+                    proxy_username = ?,
+                    proxy_password = ?,
+                    proxy_type = ?,
+                    proxy_active = ?,
+                    proxy_status = 'unchecked',
+                    proxy_last_check = NULL
+                WHERE username = ?
+            ''', (
+                proxy_settings.proxy_host,
+                proxy_settings.proxy_port,
+                proxy_settings.proxy_username,
+                proxy_settings.proxy_password,
+                proxy_settings.proxy_type,
+                proxy_settings.proxy_active,
+                username
+            ))
 
             conn.commit()
 
@@ -278,7 +277,7 @@ async def remove_account_proxy(username: str):
             cursor = conn.cursor()
 
             # Check if account exists
-            cursor.execute("SELECT username FROM accounts WHERE username = %s", (username,))
+            cursor.execute("SELECT username FROM accounts WHERE username = ?", (username,))
             account = cursor.fetchone()
 
             if not account:
@@ -286,17 +285,17 @@ async def remove_account_proxy(username: str):
 
             # Clear proxy settings
             cursor.execute('''
-                           UPDATE accounts
-                           SET proxy_host       = NULL,
-                               proxy_port       = NULL,
-                               proxy_username   = NULL,
-                               proxy_password   = NULL,
-                               proxy_type       = NULL,
-                               proxy_active     = FALSE,
-                               proxy_status     = 'unchecked',
-                               proxy_last_check = NULL
-                           WHERE username = %s
-                           ''', (username,))
+                UPDATE accounts
+                SET proxy_host = NULL,
+                    proxy_port = NULL,
+                    proxy_username = NULL,
+                    proxy_password = NULL,
+                    proxy_type = NULL,
+                    proxy_active = 0,
+                    proxy_status = 'unchecked',
+                    proxy_last_check = NULL
+                WHERE username = ?
+            ''', (username,))
 
             conn.commit()
 
@@ -318,10 +317,10 @@ async def test_account_proxy(username: str):
 
             # Get proxy settings
             cursor.execute('''
-                           SELECT proxy_host, proxy_port, proxy_username, proxy_password, proxy_type
-                           FROM accounts
-                           WHERE username = %s
-                           ''', (username,))
+                SELECT proxy_host, proxy_port, proxy_username, proxy_password, proxy_type
+                FROM accounts
+                WHERE username = ?
+            ''', (username,))
 
             proxy_data = cursor.fetchone()
             if not proxy_data or not proxy_data[0]:
@@ -335,11 +334,11 @@ async def test_account_proxy(username: str):
             # Update proxy status in database
             new_status = "working" if result["success"] else "failed"
             cursor.execute('''
-                           UPDATE accounts
-                           SET proxy_status     = %s,
-                               proxy_last_check = CURRENT_TIMESTAMP
-                           WHERE username = %s
-                           ''', (new_status, username))
+                UPDATE accounts
+                SET proxy_status = ?,
+                    proxy_last_check = CURRENT_TIMESTAMP
+                WHERE username = ?
+            ''', (new_status, username))
             conn.commit()
 
             return result
@@ -359,16 +358,16 @@ async def get_account_proxy(username: str):
             cursor = conn.cursor()
 
             cursor.execute('''
-                           SELECT proxy_host,
-                                  proxy_port,
-                                  proxy_username,
-                                  proxy_type,
-                                  proxy_active,
-                                  proxy_status,
-                                  proxy_last_check
-                           FROM accounts
-                           WHERE username = %s
-                           ''', (username,))
+                SELECT proxy_host,
+                       proxy_port,
+                       proxy_username,
+                       proxy_type,
+                       proxy_active,
+                       proxy_status,
+                       proxy_last_check
+                FROM accounts
+                WHERE username = ?
+            ''', (username,))
 
             proxy_data = cursor.fetchone()
             if not proxy_data:
