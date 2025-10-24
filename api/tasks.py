@@ -10,30 +10,30 @@ from modules.database import get_database_connection
 from modules.tasks import process_video_with_progress
 from modules.fetcher import fetch_videos_for_theme_from_accounts
 from services.task_service import TaskService
+from core import safe_datetime_to_string
 
 router = APIRouter()
-
-
-def safe_datetime_to_string(dt_value):
-    """Safely convert datetime to string"""
-    if dt_value is None:
-        return None
-    if isinstance(dt_value, datetime):
-        return dt_value.isoformat()
-    if isinstance(dt_value, str):
-        return dt_value
-    try:
-        if hasattr(dt_value, 'isoformat'):
-            return dt_value.isoformat()
-        return str(dt_value)
-    except Exception:
-        return None
 
 
 @router.post("/fetch")
 async def fetch_videos(request: FetchRequest):
     """Trigger video fetching from TikTok"""
     try:
+        # Validate input
+        from core import validate_theme, validate_username
+        if not validate_theme(request.theme):
+            raise HTTPException(status_code=400, detail="Invalid theme name")
+
+        for username in request.source_usernames:
+            if not validate_username(username):
+                raise HTTPException(status_code=400, detail=f"Invalid username: {username}")
+
+        if not request.source_usernames:
+            raise HTTPException(status_code=400, detail="No source usernames provided")
+
+        if request.videos_per_account < 1 or request.videos_per_account > 50:
+            raise HTTPException(status_code=400, detail="videos_per_account must be between 1 and 50")
+
         task_id = str(uuid.uuid4())
 
         # Log task start
@@ -107,6 +107,21 @@ async def fetch_videos(request: FetchRequest):
 async def upload_videos(request: UploadRequest):
     """Trigger video upload to Instagram"""
     try:
+        # Validate input
+        from core import validate_username, validate_video_link
+        if not validate_username(request.account_username):
+            raise HTTPException(status_code=400, detail="Invalid account username")
+
+        if not request.video_links:
+            raise HTTPException(status_code=400, detail="No video links provided")
+
+        if len(request.video_links) > 100:
+            raise HTTPException(status_code=400, detail="Maximum 100 videos per upload request")
+
+        for video_link in request.video_links:
+            if not validate_video_link(video_link):
+                raise HTTPException(status_code=400, detail=f"Invalid video link: {video_link}")
+
         # Get account details
         with get_database_connection() as conn:
             cursor = conn.cursor()

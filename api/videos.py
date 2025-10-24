@@ -3,30 +3,23 @@ from fastapi.responses import JSONResponse
 from typing import List, Optional
 from datetime import datetime
 from modules.database import get_database_connection
+from core import safe_datetime_to_string
 
 router = APIRouter()
-
-
-def safe_datetime_to_string(dt_value):
-    """Safely convert datetime to string"""
-    if dt_value is None:
-        return None
-    if isinstance(dt_value, datetime):
-        return dt_value.isoformat()
-    if isinstance(dt_value, str):
-        return dt_value
-    try:
-        if hasattr(dt_value, 'isoformat'):
-            return dt_value.isoformat()
-        return str(dt_value)
-    except Exception:
-        return None
 
 
 @router.get("/")
 async def get_videos(theme: Optional[str] = None, limit: int = 100):
     """Get videos - returning plain JSON to avoid Pydantic validation"""
     try:
+        # Validate input
+        from core import validate_theme
+        if theme and not validate_theme(theme):
+            raise HTTPException(status_code=400, detail="Invalid theme name")
+
+        if limit < 1 or limit > 1000:
+            raise HTTPException(status_code=400, detail="Limit must be between 1 and 1000")
+
         with get_database_connection() as conn:
             cursor = conn.cursor()
 
@@ -93,6 +86,11 @@ async def get_videos(theme: Optional[str] = None, limit: int = 100):
 async def delete_video(video_link: str):
     """Delete a specific video by link"""
     try:
+        # Validate input
+        from core import validate_video_link
+        if not validate_video_link(video_link):
+            raise HTTPException(status_code=400, detail="Invalid video link format")
+
         with get_database_connection() as conn:
             cursor = conn.cursor()
 
@@ -157,6 +155,15 @@ async def bulk_delete_videos(video_links: List[str]):
 async def delete_videos_by_theme(theme: str, status: Optional[str] = None):
     """Delete all videos for a specific theme"""
     try:
+        # Validate input
+        from core import validate_theme
+        if not validate_theme(theme):
+            raise HTTPException(status_code=400, detail="Invalid theme name")
+
+        valid_statuses = ['pending', 'downloaded', 'uploaded', 'failed']
+        if status and status not in valid_statuses:
+            raise HTTPException(status_code=400, detail=f"Invalid status. Must be one of: {valid_statuses}")
+
         with get_database_connection() as conn:
             cursor = conn.cursor()
 
@@ -225,6 +232,11 @@ async def delete_videos_by_status(status: str):
 async def update_video_status(video_link: str, new_status: str):
     """Update status of a specific video"""
     try:
+        # Validate input
+        from core import validate_video_link
+        if not validate_video_link(video_link):
+            raise HTTPException(status_code=400, detail="Invalid video link format")
+
         valid_statuses = ['pending', 'downloaded', 'uploaded', 'failed']
         if new_status not in valid_statuses:
             raise HTTPException(status_code=400, detail=f"Invalid status. Must be one of: {valid_statuses}")
